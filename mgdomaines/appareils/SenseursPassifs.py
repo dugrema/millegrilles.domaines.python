@@ -6,6 +6,8 @@ import datetime
 # Constantes pour SenseursPassifs
 class SenseursPassifsConstantes:
 
+    COLLECTION_NOM = 'mgdomaines_appareils_SenseursPassifs'
+
     LIBELLE_DOCUMENT_SENSEUR = 'senseur.individuel'
     LIBELLE_DOCUMENT_NOEUD = 'senseur.noeud'
     LIBELLE_DOCUMENT_GROUPE = 'groupe.senseurs'
@@ -27,6 +29,14 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
     def traiter_backlog(self):
         pass
 
+    def traiter_transaction(self):
+        pass
+
+
+# Classe qui s'occupe de l'interaction avec la collection SenseursPassifs dans Mongo
+class SenseursPassifsCollectionDao:
+    pass
+
 
 # Classe qui produit et maintient un document de metadonnees et de lectures pour un SenseurPassif.
 class ProducteurDocumentSenseurPassif:
@@ -39,20 +49,43 @@ class ProducteurDocumentSenseurPassif:
     def maj_document_senseur(self, transaction):
 
         # Verifier si toutes les cles sont presentes
-        contenu_transaction = transaction[Constantes.TRANSACTION_MESSAGE_LIBELLE_CHARGE_UTILE]
-        noeud = contenu_transaction.get(SenseursPassifsConstantes.TRANSACTION_NOEUD)
-        id_appareil = contenu_transaction.get(SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR)
-        date_lecture_epoch = contenu_transaction.get(SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE)
+        contenu_transaction = transaction[Constantes.TRANSACTION_MESSAGE_LIBELLE_CHARGE_UTILE].copy()
+        noeud = contenu_transaction[SenseursPassifsConstantes.TRANSACTION_NOEUD]
+        id_appareil = contenu_transaction[SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR]
+        date_lecture_epoch = contenu_transaction[SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE]
 
-        if noeud is None or id_appareil is None or date_lecture_epoch is None:
-            raise ValueError(
-                "Identificateurs incomplets: noeud:%s, id_appareil:%s, date_lecture:%s" %
-                (noeud, id_appareil, str(date_lecture_epoch)))
-
-        # Transformer les donnees
+        # Transformer les donnees en format natif (plus facile a utiliser plus tard)
         date_lecture = datetime.datetime.fromtimestamp(date_lecture_epoch) # Mettre en format date standard
+        contenu_transaction['temps_lecture'] = date_lecture
+
+        # Preparer le critere de selection de la lecture. Utilise pour trouver le document courant et pour l'historique
+        selection = {
+            'libelle': SenseursPassifsConstantes.LIBELLE_DOCUMENT_SENSEUR,
+            'noeud': noeud,
+            'senseur': id_appareil,
+            'temps_lecture': {'$lt': date_lecture}
+        }
+
+        # Effectuer une maj sur la date de derniere modification.
+        operation = {
+            '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True},
+            '$setOnInsert': {}
+        }
+
+        # Si location existe, s'assurer de l'ajouter uniquement lors de l'insertion (possible de changer manuellement)
+        if contenu_transaction.get('location') is not None:
+            operation['$setOnInsert']['location'] = contenu_transaction.get('location')
+            del contenu_transaction['location']
 
         # Mettre a jour les informations du document en copiant ceux de la transaction
+        operation['$set'] = contenu_transaction
+
+        print("Donnees senseur passif: selection=%s, operation=%s" % (str(selection), str(operation)))
+
+        collection = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
+        resultat_update = collection.update_one(filter=selection, update=operation, upsert=False)
+
+        # Verifier si un document a ete modifie.
 
 
     ''' 

@@ -40,7 +40,8 @@ class SenseursPassifsTest(unittest.TestCase):
             }
         }
 
-    def test_init(self):
+    def test_sauvegarder_document(self):
+        self.producteur_document_senseur_passif.maj_document_senseur(self.transaction_sample1)
         self.assertTrue(True)
 
 
@@ -48,5 +49,19 @@ class MessageDaoStub:
     pass
 
 
+class CollectionStub:
+
+    def __init__(self):
+        pass
+
+    def update_one(self, filter, update, upsert=False):
+        return None
+
+
 class DocumentDaoStub:
-    pass
+
+    def __init__(self):
+        self.collection = CollectionStub()
+
+    def get_collection(self, collection):
+        return self.collection
