@@ -40,10 +40,12 @@ class SenseursPassifsTest(unittest.TestCase):
             }
         }
 
-    def test_sauvegarder_document(self):
+    def test_sauvegarder_document_update(self):
         self.producteur_document_senseur_passif.maj_document_senseur(self.transaction_sample1)
-        self.assertTrue(True)
 
+    def test_sauvegarder_document_upsert(self):
+        self._document_dao.get_collection('').matched_count=0
+        self.producteur_document_senseur_passif.maj_document_senseur(self.transaction_sample1)
 
 class MessageDaoStub:
     pass
@@ -52,11 +54,16 @@ class MessageDaoStub:
 class CollectionStub:
 
     def __init__(self):
-        pass
+        self.matched_count=1
 
     def update_one(self, filter, update, upsert=False):
-        return None
+        return ResultatStub(self.matched_count)
 
+class ResultatStub:
+
+    def __init__(self, count=1):
+        self.matched_count = count
+        self.upserted_id = 1234
 
 class DocumentDaoStub:
 

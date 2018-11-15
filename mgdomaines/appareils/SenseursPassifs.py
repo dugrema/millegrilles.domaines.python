@@ -15,6 +15,7 @@ class SenseursPassifsConstantes:
     TRANSACTION_NOEUD = 'noeud'
     TRANSACTION_ID_SENSEUR = 'senseur'
     TRANSACTION_DATE_LECTURE = 'temps_lecture'
+    TRANSACTION_LOCATION = 'location'
 
 
 # Gestionnaire pour le domaine mgdomaines.appareils.SenseursPassifs.
@@ -56,26 +57,28 @@ class ProducteurDocumentSenseurPassif:
 
         # Transformer les donnees en format natif (plus facile a utiliser plus tard)
         date_lecture = datetime.datetime.fromtimestamp(date_lecture_epoch) # Mettre en format date standard
-        contenu_transaction['temps_lecture'] = date_lecture
+        contenu_transaction[SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE] = date_lecture
 
         # Preparer le critere de selection de la lecture. Utilise pour trouver le document courant et pour l'historique
         selection = {
-            'libelle': SenseursPassifsConstantes.LIBELLE_DOCUMENT_SENSEUR,
-            'noeud': noeud,
-            'senseur': id_appareil,
-            'temps_lecture': {'$lt': date_lecture}
+            Constantes.DOCUMENT_INFODOC_LIBELLE: SenseursPassifsConstantes.LIBELLE_DOCUMENT_SENSEUR,
+            SenseursPassifsConstantes.TRANSACTION_NOEUD: noeud,
+            SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR: id_appareil,
+            SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE: {'$lt': date_lecture}
         }
 
         # Effectuer une maj sur la date de derniere modification.
+        # Inserer les champs par defaut lors de la creation du document.
         operation = {
             '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True},
-            '$setOnInsert': {}
+            '$setOnInsert': {Constantes.DOCUMENT_INFODOC_LIBELLE: SenseursPassifsConstantes.LIBELLE_DOCUMENT_SENSEUR}
         }
 
         # Si location existe, s'assurer de l'ajouter uniquement lors de l'insertion (possible de changer manuellement)
-        if contenu_transaction.get('location') is not None:
-            operation['$setOnInsert']['location'] = contenu_transaction.get('location')
-            del contenu_transaction['location']
+        if contenu_transaction.get(SenseursPassifsConstantes.TRANSACTION_LOCATION) is not None:
+            operation['$setOnInsert'][SenseursPassifsConstantes.TRANSACTION_LOCATION] = \
+                contenu_transaction.get(SenseursPassifsConstantes.TRANSACTION_LOCATION)
+            del contenu_transaction[SenseursPassifsConstantes.TRANSACTION_LOCATION]
 
         # Mettre a jour les informations du document en copiant ceux de la transaction
         operation['$set'] = contenu_transaction
@@ -86,7 +89,14 @@ class ProducteurDocumentSenseurPassif:
         resultat_update = collection.update_one(filter=selection, update=operation, upsert=False)
 
         # Verifier si un document a ete modifie.
+        if resultat_update.matched_count == 0:
+            # Aucun document n'a ete modifie. Verifier si c'est parce qu'il n'existe pas. Sinon, le match a echoue
+            # parce qu'une lecture plus recente a deja ete enregistree (c'est OK)
 
+            # Executer la meme operation avec upsert=True pour inserer un nouveau document
+            resultat_update = collection.update_one(filter=selection, update=operation, upsert=True)
+
+            print("_id du nouveau document: %s" % str(resultat_update.upserted_id))
 
     ''' 
     Calcule les moyennes/min/max de la derniere journee pour un senseur avec donnees numeriques. 
