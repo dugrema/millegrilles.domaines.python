@@ -110,9 +110,11 @@ class ProducteurDocumentSenseurPassif:
     '''
     def calculer_aggregation_journee(self, id_document_senseur):
 
+        senseur_objectId_key = {"_id": ObjectId(id_document_senseur)}
+
         # Charger l'information du senseur
         collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
-        document_senseur = collection_senseurs.find_one({"_id": ObjectId(id_document_senseur)})
+        document_senseur = collection_senseurs.find_one(senseur_objectId_key)
 
         print("Document charge: %s" % str(document_senseur))
 
@@ -126,7 +128,8 @@ class ProducteurDocumentSenseurPassif:
         }
 
         # Creer l'intervalle pour les donnees
-        date_reference = datetime.datetime.utcnow()
+        #date_reference = datetime.datetime.utcnow()
+        date_reference = datetime.datetime(2018, 11, 10, 0)
         time_range_to = datetime.datetime(date_reference.year, date_reference.month,
                                           date_reference.day,
                                           date_reference.hour)
@@ -137,14 +140,8 @@ class ProducteurDocumentSenseurPassif:
         time_range_from = int(time_range_from.strftime('%s'))
 
         selection = {
-#            'info-transaction': {
-#                'domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE
-#            },
-#            'charge-utile': {
-#                SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE: {'$gte': time_range_from, '$lt': time_range_to},
-#                'senseur': no_senseur,
-#                'noeud': noeud
-#            }
+            'info-transaction.domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE,
+            'charge-utile.temps_lecture': {'$gte': time_range_from, '$lt': time_range_to},
             'charge-utile.senseur': no_senseur,
             'charge-utile.noeud': noeud
         }
@@ -179,16 +176,19 @@ class ProducteurDocumentSenseurPassif:
 
         resultat = []
         for res in resultat_curseur:
-            # Renommer le champ _id,
-            res['cle'] = res['_id']
+            # Extraire la date, retirer le reste de la cle (redondant, ca va deja etre dans le document du senseur)
+            res['periode'] = res['_id']['periode']
             del res['_id']
             resultat.append(res)
 
         # Trier les resultats en ordre decroissant de date
-        resultat.sort(key=lambda res2: res2['cle']['periode'], reverse=True)
+        resultat.sort(key=lambda res2: res2['periode'], reverse=True)
         for res in resultat:
             print("Resultat: %s" % res)
 
+        # Sauvegarde de l'information dans le document du senseur
+        operation_update={'$set': {'lectures_dernier_jour': resultat}}
+        collection_senseurs.update_one(filter=senseur_objectId_key, update=operation_update, upsert=False)
 
     '''
     Calcule les moyennes/min/max du dernier mois pour un senseur avec donnees numeriques.
