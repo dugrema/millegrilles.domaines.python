@@ -17,6 +17,7 @@ class SenseursPassifsConstantes:
     TRANSACTION_ID_SENSEUR = 'senseur'
     TRANSACTION_DATE_LECTURE = 'temps_lecture'
     TRANSACTION_LOCATION = 'location'
+    TRANSACTION_VALEUR_DOMAINE = 'mgdomaines.appareils.senseur'
 
 
 # Gestionnaire pour le domaine mgdomaines.appareils.SenseursPassifs.
@@ -108,7 +109,82 @@ class ProducteurDocumentSenseurPassif:
     :param id_document_senseur: _id de base de donnees Mongo pour le senseur a mettre a jour.
     '''
     def calculer_aggregation_journee(self, id_document_senseur):
-        pass
+
+        # Charger l'information du senseur
+        collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
+        document_senseur = collection_senseurs.find_one({"_id": ObjectId(id_document_senseur)})
+
+        print("Document charge: %s" % str(document_senseur))
+
+        noeud = document_senseur[SenseursPassifsConstantes.TRANSACTION_NOEUD]
+        no_senseur = document_senseur[SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR]
+
+        regroupement_champs = {
+            'temperature-moyenne': {'$avg': '$charge-utile.temperature'},
+            'humidite-moyenne': {'$avg': '$charge-utile.humidite'},
+            'pression-moyenne': {'$avg': '$charge-utile.pression'}
+        }
+
+        # Creer l'intervalle pour les donnees
+        date_reference = datetime.datetime.utcnow()
+        time_range_to = datetime.datetime(date_reference.year, date_reference.month,
+                                          date_reference.day,
+                                          date_reference.hour)
+        time_range_from = time_range_to - datetime.timedelta(days=1)
+
+        # Transformer en epoch (format de la transaction)
+        time_range_to = int(time_range_to.strftime('%s'))
+        time_range_from = int(time_range_from.strftime('%s'))
+
+        selection = {
+#            'info-transaction': {
+#                'domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE
+#            },
+#            'charge-utile': {
+#                SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE: {'$gte': time_range_from, '$lt': time_range_to},
+#                'senseur': no_senseur,
+#                'noeud': noeud
+#            }
+            'charge-utile.senseur': no_senseur,
+            'charge-utile.noeud': noeud
+        }
+
+        regroupement_periode = {
+            'year': {'$year': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
+            'month': {'$month': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
+            'day': {'$dayOfMonth': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
+            'hour': {'$hour': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
+        }
+
+        regroupement = {
+            '_id': {
+                'noeud': '$charge-utile.noeud',
+                'senseur': '$charge-utile.senseur',
+                'periode': {
+                    '$dateFromParts': regroupement_periode
+                }
+            }
+        }
+        regroupement.update(regroupement_champs)
+
+        operation = [
+            {'$match': selection},
+            {'$group': regroupement},
+        ]
+
+        print("Operation aggregation: %s" % str(operation))
+
+        collection_transactions = self._document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
+        resultat_curseur = collection_transactions.aggregate(operation)
+
+        resultat = []
+        for res in resultat_curseur:
+            # Remplacer le champ _id, transferer les valeurs dans le document principal
+            res.update(res['_id'])
+            del res['_id']
+
+            resultat.append(res)
+            print("Resultat: %s" % str(res))
 
     '''
     Calcule les moyennes/min/max du dernier mois pour un senseur avec donnees numeriques.
