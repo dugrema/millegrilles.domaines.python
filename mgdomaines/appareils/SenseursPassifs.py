@@ -93,11 +93,14 @@ class ProducteurDocumentSenseurPassif:
         if resultat_update.matched_count == 0:
             # Aucun document n'a ete modifie. Verifier si c'est parce qu'il n'existe pas. Sinon, le match a echoue
             # parce qu'une lecture plus recente a deja ete enregistree (c'est OK)
+            selection_sansdate = selection.copy()
+            del selection_sansdate[SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE]
+            document = collection.find_one(selection_sansdate)
 
-            # Executer la meme operation avec upsert=True pour inserer un nouveau document
-            resultat_update = collection.update_one(filter=selection, update=operation, upsert=True)
-
-            print("_id du nouveau document: %s" % str(resultat_update.upserted_id))
+            if document is None:
+                # Executer la meme operation avec upsert=True pour inserer un nouveau document
+                resultat_update = collection.update_one(filter=selection, update=operation, upsert=True)
+                print("_id du nouveau document: %s" % str(resultat_update.upserted_id))
 
     ''' 
     Calcule les moyennes/min/max de la derniere journee pour un senseur avec donnees numeriques. 

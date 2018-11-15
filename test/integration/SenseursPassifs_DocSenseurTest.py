@@ -20,7 +20,7 @@ class CreationDocumentTest:
 
     def run(self):
 
-        transaction = self.documentDao.charger_transaction_par_id("5bec7292e09409320fc8896f")
+        transaction = self.documentDao.charger_transaction_par_id("5bec72a4e09409320fc8a770")
         self.producteur.maj_document_senseur(transaction)
 
 ### MAIN ###
