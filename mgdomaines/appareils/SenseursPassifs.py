@@ -1,6 +1,7 @@
 # Module avec les classes de donnees, processus et gestionnaire de sous domaine mgdomaines.appareils.SenseursPassifs
+from millegrilles import Constantes
 from millegrilles.Domaines import GestionnaireDomaine
-import millegrilles.Constantes as Constantes
+from bson.objectid import ObjectId
 import datetime
 
 # Constantes pour SenseursPassifs
