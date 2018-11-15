@@ -6,3 +6,10 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
 
     def __init__(self):
         super().__init__()
+
+    def configurer(self):
+        pass
+
+    def traiter_backlog(self):
+        pass
+
