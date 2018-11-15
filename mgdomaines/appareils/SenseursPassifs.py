@@ -179,12 +179,16 @@ class ProducteurDocumentSenseurPassif:
 
         resultat = []
         for res in resultat_curseur:
-            # Remplacer le champ _id, transferer les valeurs dans le document principal
-            res.update(res['_id'])
+            # Renommer le champ _id,
+            res['cle'] = res['_id']
             del res['_id']
-
             resultat.append(res)
-            print("Resultat: %s" % str(res))
+
+        # Trier les resultats en ordre decroissant de date
+        resultat.sort(key=lambda res2: res2['cle']['periode'], reverse=True)
+        for res in resultat:
+            print("Resultat: %s" % res)
+
 
     '''
     Calcule les moyennes/min/max du dernier mois pour un senseur avec donnees numeriques.
