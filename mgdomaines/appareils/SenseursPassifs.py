@@ -128,12 +128,13 @@ class ProducteurDocumentSenseurPassif:
         }
 
         # Creer l'intervalle pour les donnees
-        #date_reference = datetime.datetime.utcnow()
-        date_reference = datetime.datetime(2018, 11, 10, 0)
+        date_reference = datetime.datetime.utcnow()
+        #date_reference = datetime.datetime(2018, 11, 10, 0)
         time_range_to = datetime.datetime(date_reference.year, date_reference.month,
                                           date_reference.day,
                                           date_reference.hour)
         time_range_from = time_range_to - datetime.timedelta(days=1)
+        time_range_from = time_range_from.replace(minute=0, second=0, microsecond=0)
 
         # Transformer en epoch (format de la transaction)
         time_range_to = int(time_range_to.strftime('%s'))
@@ -196,7 +197,87 @@ class ProducteurDocumentSenseurPassif:
     :param id_document_senseur: _id de base de donnees Mongo pour le senseur a mettre a jour.
     '''
     def calculer_aggregation_mois(self, id_document_senseur):
-        pass
+        senseur_objectId_key = {"_id": ObjectId(id_document_senseur)}
+
+        # Charger l'information du senseur
+        collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
+        document_senseur = collection_senseurs.find_one(senseur_objectId_key)
+
+        print("Document charge: %s" % str(document_senseur))
+
+        noeud = document_senseur[SenseursPassifsConstantes.TRANSACTION_NOEUD]
+        no_senseur = document_senseur[SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR]
+
+        regroupement_champs = {
+            'temperature-maximum': {'$max': '$charge-utile.temperature'},
+            'temperature-minimum': {'$min': '$charge-utile.temperature'},
+            'humidite-maximum': {'$max': '$charge-utile.humidite'},
+            'humidite-minimum': {'$min': '$charge-utile.humidite'},
+            'pression-maximum': {'$max': '$charge-utile.pression'},
+            'pression-minimum': {'$min': '$charge-utile.pression'}
+        }
+
+        # Creer l'intervalle pour les donnees
+        date_reference = datetime.datetime.utcnow()
+        time_range_to = datetime.datetime(date_reference.year, date_reference.month,
+                                          date_reference.day,
+                                          date_reference.hour)
+        time_range_from = time_range_to - datetime.timedelta(days=31)
+        time_range_from = time_range_from.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Transformer en epoch (format de la transaction)
+        time_range_to = int(time_range_to.strftime('%s'))
+        time_range_from = int(time_range_from.strftime('%s'))
+
+        selection = {
+            'info-transaction.domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE,
+            'charge-utile.temps_lecture': {'$gte': time_range_from, '$lt': time_range_to},
+            'charge-utile.senseur': no_senseur,
+            'charge-utile.noeud': noeud
+        }
+
+        regroupement_periode = {
+            'year': {'$year': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
+            'month': {'$month': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
+            'day': {'$dayOfMonth': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}}
+        }
+
+        regroupement = {
+            '_id': {
+                'noeud': '$charge-utile.noeud',
+                'senseur': '$charge-utile.senseur',
+                'periode': {
+                    '$dateFromParts': regroupement_periode
+                }
+            }
+        }
+        regroupement.update(regroupement_champs)
+
+        operation = [
+            {'$match': selection},
+            {'$group': regroupement},
+        ]
+
+        print("Operation aggregation: %s" % str(operation))
+
+        collection_transactions = self._document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
+        resultat_curseur = collection_transactions.aggregate(operation)
+
+        resultat = []
+        for res in resultat_curseur:
+            # Extraire la date, retirer le reste de la cle (redondant, ca va deja etre dans le document du senseur)
+            res['periode'] = res['_id']['periode']
+            del res['_id']
+            resultat.append(res)
+
+        # Trier les resultats en ordre decroissant de date
+        resultat.sort(key=lambda res2: res2['periode'], reverse=True)
+        for res in resultat:
+            print("Resultat: %s" % res)
+
+        # Sauvegarde de l'information dans le document du senseur
+        operation_update={'$set': {'lectures_dernier_mois': resultat}}
+        collection_senseurs.update_one(filter=senseur_objectId_key, update=operation_update, upsert=False)
 
 
 # Classe qui gere le document pour un noeud. Supporte une mise a jour incrementale des donnees.

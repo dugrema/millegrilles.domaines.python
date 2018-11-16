@@ -21,6 +21,7 @@ class AggregationSenseursDocumentTest:
     def run(self):
 
         self.producteur.calculer_aggregation_journee("5bedd619ed0c9b4b9c06971a")
+        #self.producteur.calculer_aggregation_mois("5bedd619ed0c9b4b9c06971a")
 
 ### MAIN ###
 
