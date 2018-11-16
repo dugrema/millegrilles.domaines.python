@@ -11,7 +11,7 @@ class SenseursPassifsConstantes:
     COLLECTION_NOM = 'mgdomaines_appareils_SenseursPassifs'
 
     LIBELLE_DOCUMENT_SENSEUR = 'senseur.individuel'
-    LIBELLE_DOCUMENT_NOEUD = 'senseur.noeud'
+    LIBELLE_DOCUMENT_NOEUD = 'noeud.individuel'
     LIBELLE_DOCUMENT_GROUPE = 'groupe.senseurs'
 
     TRANSACTION_NOEUD = 'noeud'
@@ -301,7 +301,45 @@ class ProducteurDocumentSenseurPassif:
 
 
 # Classe qui gere le document pour un noeud. Supporte une mise a jour incrementale des donnees.
-class ProducteurDocumentSenseurPassifNoeud:
+class ProducteurDocumentNoeud:
 
-    def __init__(self):
-        pass
+    def __init__(self, message_dao, document_dao):
+        self._message_dao = message_dao
+        self._document_dao = document_dao
+
+    '''
+    Mise a jour du document de noeud par une transaction senseur passif
+    
+    :param id_document_senseur: _id du document du senseur.
+    '''
+    def maj_document_noeud_senseurpassif(self, id_document_senseur):
+
+        collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
+        document_senseur = collection_senseurs.find_one(ObjectId(id_document_senseur))
+
+        noeud = document_senseur['noeud']
+        no_senseur = document_senseur[SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR]
+
+        champs_a_copier = ['bat_mv', 'humidite', 'temperature', 'pression', 'temps_lecture', 'location']
+        valeurs = {}
+        for champ in champs_a_copier:
+            valeur = document_senseur.get(champ)
+            if valeur is not None:
+                valeurs[champ] = valeur
+
+        donnees_senseur = {
+            'dict_senseurs.%s' % str(no_senseur): valeurs
+        }
+
+        filtre = {
+            Constantes.DOCUMENT_INFODOC_LIBELLE: SenseursPassifsConstantes.LIBELLE_DOCUMENT_NOEUD,
+            'noeud': noeud
+        }
+
+        update = {
+            '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True},
+            '$setOnInsert': filtre,
+            '$set': donnees_senseur
+        }
+
+        collection_senseurs.update_one(filter=filtre, update=update, upsert=True)

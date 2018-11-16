@@ -1,10 +1,10 @@
-from mgdomaines.appareils.SenseursPassifs import ProducteurDocumentSenseurPassif
+from mgdomaines.appareils.SenseursPassifs import ProducteurDocumentNoeud
 from millegrilles.dao.Configuration import TransactionConfiguration
 from millegrilles.dao.MessageDAO import PikaDAO
 from millegrilles.dao.DocumentDAO import MongoDAO
 
 
-class CreationDocumentTest:
+class NoeudSenseursDocumentTest:
 
     def __init__(self):
         self.configuration = TransactionConfiguration()
@@ -16,14 +16,13 @@ class CreationDocumentTest:
         self.documentDao = MongoDAO(self.configuration)
         self.documentDao.connecter()
 
-        self.producteur = ProducteurDocumentSenseurPassif(self.messageDao, self.documentDao)
+        self.producteur = ProducteurDocumentNoeud(self.messageDao, self.documentDao)
 
     def run(self):
 
-        transaction = self.documentDao.charger_transaction_par_id("5bee12cfe09409b7881c45ff")
-        self.producteur.maj_document_senseur(transaction)
+        self.producteur.maj_document_noeud_senseurpassif("5beedd8482cc2cb5ab0a90e5")
 
 ### MAIN ###
 
-test = CreationDocumentTest()
+test = NoeudSenseursDocumentTest()
 test.run()
