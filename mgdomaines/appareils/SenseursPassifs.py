@@ -17,7 +17,7 @@ class SenseursPassifsConstantes:
     TRANSACTION_ID_SENSEUR = 'senseur'
     TRANSACTION_DATE_LECTURE = 'temps_lecture'
     TRANSACTION_LOCATION = 'location'
-    TRANSACTION_VALEUR_DOMAINE = 'mgdomaines.appareils.senseur'
+    TRANSACTION_VALEUR_DOMAINE = 'mgdomaines.appareils.SenseursPassifs.lecture'
 
 
 # Gestionnaire pour le domaine mgdomaines.appareils.SenseursPassifs.
@@ -129,16 +129,15 @@ class ProducteurDocumentSenseurPassif:
 
         # Creer l'intervalle pour les donnees. Utiliser timezone pour s'assurer de remonter un nombre d'heures correct
         date_reference = datetime.datetime.utcnow()
-        #date_reference = datetime.datetime(2018, 11, 10, 0)
         time_range_to = datetime.datetime(date_reference.year, date_reference.month,
                                           date_reference.day,
-                                          date_reference.hour, tzinfo=datetime.timezone.utc)
+                                          date_reference.hour)
         time_range_from = time_range_to - datetime.timedelta(hours=25)
-        time_range_from = time_range_from.replace(minute=0, second=0, microsecond=0, tzinfo=datetime.timezone.utc)
+        time_range_from = time_range_from.replace(minute=0, second=0, microsecond=0)
 
         # Transformer en epoch (format de la transaction)
-        time_range_to = int(time_range_to.strftime('%s'))
-        time_range_from = int(time_range_from.strftime('%s'))
+        time_range_to = int(time_range_to.timestamp())
+        time_range_from = int(time_range_from.timestamp())
 
         selection = {
             'info-transaction.domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE,
@@ -190,7 +189,7 @@ class ProducteurDocumentSenseurPassif:
 
         # Sauvegarde de l'information dans le document du senseur
         operation_update={
-            '$set': {'lectures_dernier_jour': resultat},
+            '$set': {'moyennes_dernier_jour': resultat},
             '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True}
         }
         collection_senseurs.update_one(filter=senseur_objectId_key, update=operation_update, upsert=False)
@@ -230,8 +229,8 @@ class ProducteurDocumentSenseurPassif:
         time_range_from = time_range_from.replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Transformer en epoch (format de la transaction)
-        time_range_to = int(time_range_to.strftime('%s'))
-        time_range_from = int(time_range_from.strftime('%s'))
+        time_range_to = int(time_range_to.timestamp())
+        time_range_from = int(time_range_from.timestamp())
 
         selection = {
             'info-transaction.domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE,
@@ -283,7 +282,7 @@ class ProducteurDocumentSenseurPassif:
 
         # Sauvegarde de l'information dans le document du senseur
         operation_update={
-            '$set': {'lectures_dernier_mois': resultat},
+            '$set': {'extremes_dernier_mois': resultat},
             '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True}
         }
         collection_senseurs.update_one(filter=senseur_objectId_key, update=operation_update, upsert=False)
