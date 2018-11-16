@@ -54,18 +54,6 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
     def traiter_backlog(self):
         pass
 
-    def traiter_transactionA(self, ch, method, properties, body):
-        message_dict = self.json_helper.bin_utf8_json_vers_dict(body)
-        evenement = message_dict.get("evenements")
-
-        if evenement == Constantes.EVENEMENT_TRANSACTION_PERSISTEE:
-            message_test = {
-                Constantes.TRANSACTION_MESSAGE_LIBELLE_ID_MONGO: "5bee12bce09409b7881c0da4"
-            }
-
-            processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsLecture"
-            self.demarrer_processus(processus, message_test)
-
     def get_nom_queue(self):
         nom_millegrille = self.configuration.nom_millegrille
         nom_queue_senseurspassifs = 'mg.%s.mgdomaines.appareils.SenseursPassifs' % nom_millegrille
@@ -83,12 +71,8 @@ class TraitementMessageLecture(BaseCallback):
         evenement = message_dict.get("evenements")
 
         if evenement == Constantes.EVENEMENT_TRANSACTION_PERSISTEE:
-            message_test = {
-                Constantes.TRANSACTION_MESSAGE_LIBELLE_ID_MONGO: "5bee12bce09409b7881c0da4"
-            }
-
             processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsLecture"
-            self._gestionnaire.demarrer_processus(processus, message_test)
+            self._gestionnaire.demarrer_processus(processus, message_dict)
 
 # Classe qui produit et maintient un document de metadonnees et de lectures pour un SenseurPassif.
 class ProducteurDocumentSenseurPassif:
@@ -142,7 +126,7 @@ class ProducteurDocumentSenseurPassif:
         print("Donnees senseur passif: selection=%s, operation=%s" % (str(selection), str(operation)))
 
         collection = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
-        document_senseur = collection.find_and_modify(query=selection, update=operation, upsert=False, fields="_id:1")
+        document_senseur = collection.find_one_and_update(filter=selection, update=operation, upsert=False, fields="_id:1")
 
         # Verifier si un document a ete modifie.
         if document_senseur is None:
@@ -150,7 +134,7 @@ class ProducteurDocumentSenseurPassif:
             # parce qu'une lecture plus recente a deja ete enregistree (c'est OK)
             selection_sansdate = selection.copy()
             del selection_sansdate[SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE]
-            document_senseur = collection.find_one(selection_sansdate)
+            document_senseur = collection.find_one(filter=selection_sansdate)
 
             if document_senseur is None:
                 # Executer la meme operation avec upsert=True pour inserer un nouveau document
@@ -414,6 +398,8 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
     ''' Enregistrer l'information de la transaction dans le document du senseur '''
     def initiale(self):
         doc_transaction = self.charger_transaction()
+        print("Document processus: %s" % self._document_processus)
+        print("Document transaction: %s" % doc_transaction)
 
         producteur_document = ProducteurDocumentSenseurPassif(self.message_dao(), self.document_dao())
         document_senseur = producteur_document.maj_document_senseur(doc_transaction)
