@@ -127,14 +127,14 @@ class ProducteurDocumentSenseurPassif:
             'pression-moyenne': {'$avg': '$charge-utile.pression'}
         }
 
-        # Creer l'intervalle pour les donnees
+        # Creer l'intervalle pour les donnees. Utiliser timezone pour s'assurer de remonter un nombre d'heures correct
         date_reference = datetime.datetime.utcnow()
         #date_reference = datetime.datetime(2018, 11, 10, 0)
         time_range_to = datetime.datetime(date_reference.year, date_reference.month,
                                           date_reference.day,
-                                          date_reference.hour)
-        time_range_from = time_range_to - datetime.timedelta(days=1)
-        time_range_from = time_range_from.replace(minute=0, second=0, microsecond=0)
+                                          date_reference.hour, tzinfo=datetime.timezone.utc)
+        time_range_from = time_range_to - datetime.timedelta(hours=25)
+        time_range_from = time_range_from.replace(minute=0, second=0, microsecond=0, tzinfo=datetime.timezone.utc)
 
         # Transformer en epoch (format de la transaction)
         time_range_to = int(time_range_to.strftime('%s'))
@@ -147,6 +147,7 @@ class ProducteurDocumentSenseurPassif:
             'charge-utile.noeud': noeud
         }
 
+        # Noter l'absence de timezone - ce n'est pas important pour le regroupement par heure.
         regroupement_periode = {
             'year': {'$year': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
             'month': {'$month': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
@@ -188,7 +189,10 @@ class ProducteurDocumentSenseurPassif:
             print("Resultat: %s" % res)
 
         # Sauvegarde de l'information dans le document du senseur
-        operation_update={'$set': {'lectures_dernier_jour': resultat}}
+        operation_update={
+            '$set': {'lectures_dernier_jour': resultat},
+            '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True}
+        }
         collection_senseurs.update_one(filter=senseur_objectId_key, update=operation_update, upsert=False)
 
     '''
@@ -236,10 +240,12 @@ class ProducteurDocumentSenseurPassif:
             'charge-utile.noeud': noeud
         }
 
+        # Noter l'utilisation de la timezone pour le regroupement. Important pour faire la separation des donnees
+        # correctement.
         regroupement_periode = {
-            'year': {'$year': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
-            'month': {'$month': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
-            'day': {'$dayOfMonth': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}}
+            'year': {'$year':  {'date': '$info-transaction.estampille', 'timezone': 'America/Montreal'}},
+            'month': {'$month':  {'date': '$info-transaction.estampille', 'timezone': 'America/Montreal'}},
+            'day': {'$dayOfMonth':  {'date': '$info-transaction.estampille', 'timezone': 'America/Montreal'}}
         }
 
         regroupement = {
@@ -276,7 +282,10 @@ class ProducteurDocumentSenseurPassif:
             print("Resultat: %s" % res)
 
         # Sauvegarde de l'information dans le document du senseur
-        operation_update={'$set': {'lectures_dernier_mois': resultat}}
+        operation_update={
+            '$set': {'lectures_dernier_mois': resultat},
+            '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True}
+        }
         collection_senseurs.update_one(filter=senseur_objectId_key, update=operation_update, upsert=False)
 
 
