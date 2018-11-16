@@ -20,8 +20,10 @@ class CreationDocumentTest:
 
     def run(self):
 
-        transaction = self.documentDao.charger_transaction_par_id("5bee12cfe09409b7881c45ff")
-        self.producteur.maj_document_senseur(transaction)
+        transaction = self.documentDao.charger_transaction_par_id("5bee12bbe09409b7881c0d86")
+        id_doc = self.producteur.maj_document_senseur(transaction)
+
+        print("Document mis a jour: %s" % id_doc)
 
 ### MAIN ###
 

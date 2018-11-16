@@ -1,6 +1,7 @@
 # Module avec les classes de donnees, processus et gestionnaire de sous domaine mgdomaines.appareils.SenseursPassifs
 from millegrilles import Constantes
 from millegrilles.Domaines import GestionnaireDomaine
+from millegrilles.processus.MGProcessus import MGProcessus, MGProcessusTransaction
 from bson.objectid import ObjectId
 import datetime
 
@@ -37,11 +38,6 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
         pass
 
 
-# Classe qui s'occupe de l'interaction avec la collection SenseursPassifs dans Mongo
-class SenseursPassifsCollectionDao:
-    pass
-
-
 # Classe qui produit et maintient un document de metadonnees et de lectures pour un SenseurPassif.
 class ProducteurDocumentSenseurPassif:
 
@@ -49,7 +45,12 @@ class ProducteurDocumentSenseurPassif:
         self._message_dao = message_dao
         self._document_dao = document_dao
 
-    ''' Extrait l'information d'une lecture de senseur passif pour creer ou mettre a jour le document du senseur.  '''
+    ''' 
+    Extrait l'information d'une lecture de senseur passif pour creer ou mettre a jour le document du senseur.
+    
+    :param transaction: Document de la transaction.
+    :return: L'identificateur mongo _id du document de senseur qui a ete cree/modifie.
+    '''
     def maj_document_senseur(self, transaction):
 
         # Verifier si toutes les cles sont presentes
@@ -89,20 +90,28 @@ class ProducteurDocumentSenseurPassif:
         print("Donnees senseur passif: selection=%s, operation=%s" % (str(selection), str(operation)))
 
         collection = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
-        resultat_update = collection.update_one(filter=selection, update=operation, upsert=False)
+        document_senseur = collection.find_and_modify(query=selection, update=operation, upsert=False, fields="_id:1")
 
         # Verifier si un document a ete modifie.
-        if resultat_update.matched_count == 0:
+        if document_senseur is None:
             # Aucun document n'a ete modifie. Verifier si c'est parce qu'il n'existe pas. Sinon, le match a echoue
             # parce qu'une lecture plus recente a deja ete enregistree (c'est OK)
             selection_sansdate = selection.copy()
             del selection_sansdate[SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE]
-            document = collection.find_one(selection_sansdate)
+            document_senseur = collection.find_one(selection_sansdate)
 
-            if document is None:
+            if document_senseur is None:
                 # Executer la meme operation avec upsert=True pour inserer un nouveau document
                 resultat_update = collection.update_one(filter=selection, update=operation, upsert=True)
+                document_senseur = {'_id': resultat_update.upserted_id}
                 print("_id du nouveau document: %s" % str(resultat_update.upserted_id))
+            else:
+                print("Document existant non MAJ: %s" % str(document_senseur))
+                document_senseur = None
+        else:
+            print("MAJ update: %s" % str(document_senseur))
+
+        return document_senseur
 
     ''' 
     Calcule les moyennes/min/max de la derniere journee pour un senseur avec donnees numeriques. 
@@ -218,7 +227,6 @@ class ProducteurDocumentSenseurPassif:
 
         # Creer l'intervalle pour les donnees
         time_range_from, time_range_to = ProducteurDocumentSenseurPassif.calculer_daterange(days=31)
-
 
         # Transformer en epoch (format de la transaction)
         time_range_to = int(time_range_to.timestamp())
@@ -343,3 +351,45 @@ class ProducteurDocumentNoeud:
         }
 
         collection_senseurs.update_one(filter=filtre, update=update, upsert=True)
+
+
+# Processus pour enregistrer une transaction d'un senseur passif
+class ProcessusTransactionSenseursPassifs(MGProcessusTransaction):
+
+    def __init__(self, controleur, evenement):
+        super().__init__(controleur, evenement)
+
+    ''' Enregistrer l'information de la transaction dans le document du senseur '''
+    def initiale(self):
+        doc_transaction = self.charger_transaction()
+
+        producteur_document = ProducteurDocumentSenseurPassif(self.message_dao(), self.document_dao())
+        id_document_senseur = producteur_document.maj_document_senseur(doc_transaction)
+        parametres = {}
+
+        if id_document_senseur is not None:
+            parametres["id_document_senseur"] = id_document_senseur
+            self.set_etape_suivante(ProcessusTransactionSenseursPassifs.maj_noeud.__name__)
+        else:
+            # Le document de senseur n'a pas ete modifie, probablement parce que les donnees n'etaient pas
+            # les plus recentes. Il n'y a plus rien d'autre a faire.
+            self.set_etape_suivante()   # Etape finale
+
+        return parametres
+
+    ''' Mettre a jour l'information du noeud pour ce senseur '''
+    def maj_noeud(self):
+
+        id_document_senseur = self._document_processus['id_document_senseur']
+
+        producteur_document = ProducteurDocumentNoeud(self.message_dao(), self.document_dao())
+        producteur_document.maj_document_noeud_senseurpassif(id_document_senseur)
+
+        self.set_etape_suivante()  # Etape finale
+
+
+# Processus pour mettre a jour un document de noeud suite a une transaction de senseur passif
+class ProcessusMAJNoeudsSenseurPassif(MGProcessus):
+
+    def __init__(self, controleur, evenement):
+        super().__init__(controleur, evenement)
