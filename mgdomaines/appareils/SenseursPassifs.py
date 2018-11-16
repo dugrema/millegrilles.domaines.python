@@ -354,7 +354,7 @@ class ProducteurDocumentNoeud:
 
 
 # Processus pour enregistrer une transaction d'un senseur passif
-class ProcessusTransactionSenseursPassifs(MGProcessusTransaction):
+class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
 
     def __init__(self, controleur, evenement):
         super().__init__(controleur, evenement)
@@ -364,23 +364,24 @@ class ProcessusTransactionSenseursPassifs(MGProcessusTransaction):
         doc_transaction = self.charger_transaction()
 
         producteur_document = ProducteurDocumentSenseurPassif(self.message_dao(), self.document_dao())
-        id_document_senseur = producteur_document.maj_document_senseur(doc_transaction)
-        parametres = {}
+        document_senseur = producteur_document.maj_document_senseur(doc_transaction)
 
-        if id_document_senseur is not None:
-            parametres["id_document_senseur"] = id_document_senseur
-            self.set_etape_suivante(ProcessusTransactionSenseursPassifs.maj_noeud.__name__)
+        parametres = None
+        if document_senseur and document_senseur.get("_id") is not None:
+            # Preparer la prochaine etape - mettre a jour le noeud
+            parametres = {"id_document_senseur": document_senseur.get("_id")}
+            self.set_etape_suivante(ProcessusTransactionSenseursPassifsLecture.maj_noeud.__name__)
         else:
             # Le document de senseur n'a pas ete modifie, probablement parce que les donnees n'etaient pas
             # les plus recentes. Il n'y a plus rien d'autre a faire.
-            self.set_etape_suivante()   # Etape finale
+            self.set_etape_suivante()   # Etape finale par defaut
 
         return parametres
 
     ''' Mettre a jour l'information du noeud pour ce senseur '''
     def maj_noeud(self):
 
-        id_document_senseur = self._document_processus['id_document_senseur']
+        id_document_senseur = self._document_processus['parametres']['id_document_senseur']
 
         producteur_document = ProducteurDocumentNoeud(self.message_dao(), self.document_dao())
         producteur_document.maj_document_noeud_senseurpassif(id_document_senseur)
