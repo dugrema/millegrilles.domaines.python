@@ -4,6 +4,7 @@ from millegrilles.Domaines import GestionnaireDomaine
 from bson.objectid import ObjectId
 import datetime
 
+
 # Constantes pour SenseursPassifs
 class SenseursPassifsConstantes:
 
@@ -58,7 +59,7 @@ class ProducteurDocumentSenseurPassif:
         date_lecture_epoch = contenu_transaction[SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE]
 
         # Transformer les donnees en format natif (plus facile a utiliser plus tard)
-        date_lecture = datetime.datetime.fromtimestamp(date_lecture_epoch) # Mettre en format date standard
+        date_lecture = datetime.datetime.fromtimestamp(date_lecture_epoch)   # Mettre en format date standard
         contenu_transaction[SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE] = date_lecture
 
         # Preparer le critere de selection de la lecture. Utilise pour trouver le document courant et pour l'historique
@@ -110,11 +111,11 @@ class ProducteurDocumentSenseurPassif:
     '''
     def calculer_aggregation_journee(self, id_document_senseur):
 
-        senseur_objectId_key = {"_id": ObjectId(id_document_senseur)}
+        senseur_objectid_key = {"_id": ObjectId(id_document_senseur)}
 
         # Charger l'information du senseur
         collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
-        document_senseur = collection_senseurs.find_one(senseur_objectId_key)
+        document_senseur = collection_senseurs.find_one(senseur_objectid_key)
 
         print("Document charge: %s" % str(document_senseur))
 
@@ -128,12 +129,7 @@ class ProducteurDocumentSenseurPassif:
         }
 
         # Creer l'intervalle pour les donnees. Utiliser timezone pour s'assurer de remonter un nombre d'heures correct
-        date_reference = datetime.datetime.utcnow()
-        time_range_to = datetime.datetime(date_reference.year, date_reference.month,
-                                          date_reference.day,
-                                          date_reference.hour)
-        time_range_from = time_range_to - datetime.timedelta(hours=25)
-        time_range_from = time_range_from.replace(minute=0, second=0, microsecond=0)
+        time_range_from, time_range_to = ProducteurDocumentSenseurPassif.calculer_daterange(hours=25)
 
         # Transformer en epoch (format de la transaction)
         time_range_to = int(time_range_to.timestamp())
@@ -188,11 +184,11 @@ class ProducteurDocumentSenseurPassif:
             print("Resultat: %s" % res)
 
         # Sauvegarde de l'information dans le document du senseur
-        operation_update={
+        operation_update = {
             '$set': {'moyennes_dernier_jour': resultat},
             '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True}
         }
-        collection_senseurs.update_one(filter=senseur_objectId_key, update=operation_update, upsert=False)
+        collection_senseurs.update_one(filter=senseur_objectid_key, update=operation_update, upsert=False)
 
     '''
     Calcule les moyennes/min/max du dernier mois pour un senseur avec donnees numeriques.
@@ -200,11 +196,11 @@ class ProducteurDocumentSenseurPassif:
     :param id_document_senseur: _id de base de donnees Mongo pour le senseur a mettre a jour.
     '''
     def calculer_aggregation_mois(self, id_document_senseur):
-        senseur_objectId_key = {"_id": ObjectId(id_document_senseur)}
+        senseur_objectid_key = {"_id": ObjectId(id_document_senseur)}
 
         # Charger l'information du senseur
         collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
-        document_senseur = collection_senseurs.find_one(senseur_objectId_key)
+        document_senseur = collection_senseurs.find_one(senseur_objectid_key)
 
         print("Document charge: %s" % str(document_senseur))
 
@@ -221,12 +217,8 @@ class ProducteurDocumentSenseurPassif:
         }
 
         # Creer l'intervalle pour les donnees
-        date_reference = datetime.datetime.utcnow()
-        time_range_to = datetime.datetime(date_reference.year, date_reference.month,
-                                          date_reference.day,
-                                          date_reference.hour)
-        time_range_from = time_range_to - datetime.timedelta(days=31)
-        time_range_from = time_range_from.replace(hour=0, minute=0, second=0, microsecond=0)
+        time_range_from, time_range_to = ProducteurDocumentSenseurPassif.calculer_daterange(days=31)
+
 
         # Transformer en epoch (format de la transaction)
         time_range_to = int(time_range_to.timestamp())
@@ -281,11 +273,31 @@ class ProducteurDocumentSenseurPassif:
             print("Resultat: %s" % res)
 
         # Sauvegarde de l'information dans le document du senseur
-        operation_update={
+        operation_update = {
             '$set': {'extremes_dernier_mois': resultat},
             '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True}
         }
-        collection_senseurs.update_one(filter=senseur_objectId_key, update=operation_update, upsert=False)
+        collection_senseurs.update_one(filter=senseur_objectid_key, update=operation_update, upsert=False)
+
+    ''' 
+    Methode qui calcule un date range a partir de maintenant
+    
+    :param days: Nombre de jour a remonter (passe) 
+    :param hours: Nombre de jour a remonter (passe)
+    :return: Format datetime, from, to 
+    '''
+    @staticmethod
+    def calculer_daterange(days=0, hours=0):
+        date_reference = datetime.datetime.utcnow()
+        time_range_to = datetime.datetime(date_reference.year, date_reference.month,
+                                          date_reference.day,
+                                          date_reference.hour)
+        time_range_from = time_range_to - datetime.timedelta(days=days, hours=hours)
+        time_range_from = time_range_from.replace(minute=0, second=0, microsecond=0)
+        if days > 0 and hours == 0:  # Ajuster pour avoir la journee au complet
+            time_range_from = time_range_from.replace(hour=0)
+
+        return time_range_from, time_range_to
 
 
 # Classe qui gere le document pour un noeud. Supporte une mise a jour incrementale des donnees.
