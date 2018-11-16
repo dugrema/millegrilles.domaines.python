@@ -2,6 +2,7 @@
 from millegrilles import Constantes
 from millegrilles.Domaines import GestionnaireDomaine
 from millegrilles.processus.MGProcessus import MGProcessus, MGProcessusTransaction
+from millegrilles.dao.MessageDAO import BaseCallback
 from bson.objectid import ObjectId
 import datetime
 
@@ -27,16 +28,67 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
 
     def __init__(self):
         super().__init__()
+        self._traitement_lecture = None
+        self.traiter_transaction = None   # Override de la methode super().traiter_transaction
 
     def configurer(self):
-        pass
+        super().configurer()
+
+        self._traitement_lecture = TraitementMessageLecture(self)
+        self.traiter_transaction = self._traitement_lecture.callbackAvecAck   # Transfert methode
+
+        nom_millegrille = self.configuration.nom_millegrille
+        nom_queue_senseurspassifs = self.get_nom_queue()
+
+        # Configurer la Queue pour SenseursPassifs sur RabbitMQ
+        self.message_dao.channel.queue_declare(
+            queue=nom_queue_senseurspassifs,
+            durable=True)
+
+        self.message_dao.channel.queue_bind(
+            exchange=self.configuration.exchange_evenements,
+            queue=nom_queue_senseurspassifs,
+            routing_key='%s.destinataire.domaine.mgdomaines.appareils.SenseursPassifs.#' % nom_millegrille
+        )
 
     def traiter_backlog(self):
         pass
 
-    def traiter_transaction(self):
-        pass
+    def traiter_transactionA(self, ch, method, properties, body):
+        message_dict = self.json_helper.bin_utf8_json_vers_dict(body)
+        evenement = message_dict.get("evenements")
 
+        if evenement == Constantes.EVENEMENT_TRANSACTION_PERSISTEE:
+            message_test = {
+                Constantes.TRANSACTION_MESSAGE_LIBELLE_ID_MONGO: "5bee12bce09409b7881c0da4"
+            }
+
+            processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsLecture"
+            self.demarrer_processus(processus, message_test)
+
+    def get_nom_queue(self):
+        nom_millegrille = self.configuration.nom_millegrille
+        nom_queue_senseurspassifs = 'mg.%s.mgdomaines.appareils.SenseursPassifs' % nom_millegrille
+        return nom_queue_senseurspassifs
+
+
+class TraitementMessageLecture(BaseCallback):
+
+    def __init__(self, gestionnaire):
+        super().__init__(gestionnaire.configuration)
+        self._gestionnaire = gestionnaire
+
+    def traiter_message(self, ch, method, properties, body):
+        message_dict = self.json_helper.bin_utf8_json_vers_dict(body)
+        evenement = message_dict.get("evenements")
+
+        if evenement == Constantes.EVENEMENT_TRANSACTION_PERSISTEE:
+            message_test = {
+                Constantes.TRANSACTION_MESSAGE_LIBELLE_ID_MONGO: "5bee12bce09409b7881c0da4"
+            }
+
+            processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsLecture"
+            self._gestionnaire.demarrer_processus(processus, message_test)
 
 # Classe qui produit et maintient un document de metadonnees et de lectures pour un SenseurPassif.
 class ProducteurDocumentSenseurPassif:
