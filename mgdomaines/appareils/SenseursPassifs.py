@@ -482,6 +482,8 @@ class ProcessusTransactionSenseursPassifsMAJHoraire(MGProcessus):
         for doc_senseur in liste_documents:
             producteur.calculer_aggregation_journee(doc_senseur)
 
+        self.set_etape_suivante()  # Rien a faire, etape finale
+
 
 class ProcessusTransactionSenseursPassifsMAJQuotidienne(MGProcessus):
 
@@ -509,6 +511,8 @@ class ProcessusTransactionSenseursPassifsMAJQuotidienne(MGProcessus):
         liste_documents = self._document_processus['parametres']['documents_senseurs']
         for doc_senseur in liste_documents:
             producteur.calculer_aggregation_mois(doc_senseur)
+
+        self.set_etape_suivante()  # Rien a faire, etape finale
 
 # Processus pour mettre a jour un document de noeud suite a une transaction de senseur passif
 class ProcessusMAJNoeudsSenseurPassif(MGProcessus):
