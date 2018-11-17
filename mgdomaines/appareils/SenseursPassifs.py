@@ -22,6 +22,8 @@ class SenseursPassifsConstantes:
     TRANSACTION_LOCATION = 'location'
     TRANSACTION_VALEUR_DOMAINE = 'mgdomaines.appareils.SenseursPassifs.lecture'
 
+    EVENEMENT_MAJ_HORAIRE = 'miseajour.horaire'
+    EVENEMENT_MAJ_QUOTIDIENNE = 'miseajour.quotidienne'
 
 # Gestionnaire pour le domaine mgdomaines.appareils.SenseursPassifs.
 class GestionnaireSenseursPassifs(GestionnaireDomaine):
@@ -73,6 +75,16 @@ class TraitementMessageLecture(BaseCallback):
         if evenement == Constantes.EVENEMENT_TRANSACTION_PERSISTEE:
             processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsLecture"
             self._gestionnaire.demarrer_processus(processus, message_dict)
+        elif evenement == SenseursPassifsConstantes.EVENEMENT_MAJ_HORAIRE:
+            processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsMAJHoraire"
+            self._gestionnaire.demarrer_processus(processus, message_dict)
+        elif evenement == SenseursPassifsConstantes.EVENEMENT_MAJ_QUOTIDIENNE:
+            processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsMAJQuotidienne"
+            self._gestionnaire.demarrer_processus(processus, message_dict)
+        else:
+            # Type d'evenement inconnu, on lance une exception
+            raise ValueError("Type d'evenement inconnu: %s" % evenement)
+
 
 # Classe qui produit et maintient un document de metadonnees et de lectures pour un SenseurPassif.
 class ProducteurDocumentSenseurPassif:
@@ -343,6 +355,23 @@ class ProducteurDocumentSenseurPassif:
 
         return time_range_from, time_range_to
 
+    '''
+    Retourne les _id de tous les documents de senseurs. 
+    '''
+    def trouver_id_documents_senseurs(self):
+        collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
+
+        selection = {
+            Constantes.DOCUMENT_INFODOC_LIBELLE: SenseursPassifsConstantes.LIBELLE_DOCUMENT_SENSEUR,
+        }
+        documents = collection_senseurs.find(filter=selection, projection={'_id': 1})
+
+        # Extraire les documents du curseur, change de ObjectId vers un string
+        document_ids = []
+        for doc in documents:
+            document_ids.append(str(doc['_id']))
+
+        return document_ids
 
 # Classe qui gere le document pour un noeud. Supporte une mise a jour incrementale des donnees.
 class ProducteurDocumentNoeud:
@@ -426,6 +455,60 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
 
         self.set_etape_suivante()  # Etape finale
 
+
+class ProcessusTransactionSenseursPassifsMAJHoraire(MGProcessus):
+
+    def __init__(self, controleur, evenement):
+        super().__init__(controleur, evenement)
+
+    def initiale(self):
+        # Faire liste des documents a mettre a jour
+        producteur = ProducteurDocumentSenseurPassif(self.message_dao(), self.document_dao())
+        liste_documents = producteur.trouver_id_documents_senseurs()
+
+        parametres = {}
+        if len(liste_documents) > 0:
+            parametres['documents_senseurs'] = liste_documents
+            self.set_etape_suivante(ProcessusTransactionSenseursPassifsMAJHoraire.calculer_moyennes.__name__)
+        else:
+            self.set_etape_suivante()   # Rien a faire, etape finale
+
+        return parametres
+
+    def calculer_moyennes(self):
+        producteur = ProducteurDocumentSenseurPassif(self.message_dao(), self.document_dao())
+
+        liste_documents = self._document_processus['parametres']['documents_senseurs']
+        for doc_senseur in liste_documents:
+            producteur.calculer_aggregation_journee(doc_senseur)
+
+
+class ProcessusTransactionSenseursPassifsMAJQuotidienne(MGProcessus):
+
+    def __init__(self, controleur, evenement):
+        super().__init__(controleur, evenement)
+
+    def initiale(self):
+        # Faire liste des documents a mettre a jour
+        producteur = ProducteurDocumentSenseurPassif(self.message_dao(), self.document_dao())
+        liste_documents = producteur.trouver_id_documents_senseurs()
+
+        parametres = {}
+        if len(liste_documents) > 0:
+            parametres['documents_senseurs'] = liste_documents
+            self.set_etape_suivante(
+                ProcessusTransactionSenseursPassifsMAJQuotidienne.calculer_valeurs_quotidiennes.__name__)
+        else:
+            self.set_etape_suivante()   # Rien a faire, etape finale
+
+        return parametres
+
+    def calculer_valeurs_quotidiennes(self):
+        producteur = ProducteurDocumentSenseurPassif(self.message_dao(), self.document_dao())
+
+        liste_documents = self._document_processus['parametres']['documents_senseurs']
+        for doc_senseur in liste_documents:
+            producteur.calculer_aggregation_mois(doc_senseur)
 
 # Processus pour mettre a jour un document de noeud suite a une transaction de senseur passif
 class ProcessusMAJNoeudsSenseurPassif(MGProcessus):

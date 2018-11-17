@@ -1,27 +1,28 @@
 from millegrilles.Declencheur import Declencheur
+from mgdomaines.appareils.SenseursPassifs import SenseursPassifsConstantes
 import sys
 import datetime
 
 
-class DeclencheurSenseursPassif(Declencheur):
+class DeclencheurAppareils(Declencheur):
 
-    NOM_DOMAINE = 'mgdomaines.appareils.SenseursPassifs'
+    NOM_DOMAINE = 'mgdomaines.appareils'
 
     def __init__(self):
         super().__init__()
 
-    def maj_horaire(self):
-        domaine = '%s.%s' % (self.NOM_DOMAINE, 'MAJHoraire')
+    def senseurspassifs_maj_horaire(self):
+        domaine = '%s.%s' % (self.NOM_DOMAINE, 'SenseursPassifs.MAJHoraire')
         dict_message = {
-            'evenements': 'miseajour.horaire',
+            'evenements': SenseursPassifsConstantes.EVENEMENT_MAJ_HORAIRE,
             'timestamp': datetime.datetime.utcnow().isoformat()
         }
         self.transmettre_declencheur_domaine(domaine, dict_message)
 
-    def maj_quotidienne(self):
-        domaine = '%s.%s' % (self.NOM_DOMAINE, 'MAJQuotidienne')
+    def senseurspassifs_maj_quotidienne(self):
+        domaine = '%s.%s' % (self.NOM_DOMAINE, 'SenseursPassifs.MAJQuotidienne')
         dict_message = {
-            'evenements': 'miseajour.quotidienne',
+            'evenements': SenseursPassifsConstantes.EVENEMENT_MAJ_QUOTIDIENNE,
             'timestamp': datetime.datetime.utcnow().isoformat()
         }
         self.transmettre_declencheur_domaine(domaine, dict_message)
@@ -30,7 +31,7 @@ class DeclencheurSenseursPassif(Declencheur):
 
 if len(sys.argv) == 2:
 
-    declencheur = DeclencheurSenseursPassif()
+    declencheur = DeclencheurAppareils()
     methode_declencheur = getattr(declencheur, sys.argv[1])
 
     # Executer la methode
