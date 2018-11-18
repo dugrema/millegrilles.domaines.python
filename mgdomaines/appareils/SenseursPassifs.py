@@ -522,7 +522,7 @@ class TraitementBacklogLecturesSenseursPassifs():
 
     def __init__(self, message_dao, document_dao):
         self._message_dao = message_dao
-        self._document_dao = document_date
+        self._document_dao = document_dao
 
     def run_requete_plusrecentetransactionlecture_parsenseur(self):
         filtre = {
@@ -545,7 +545,7 @@ class TraitementBacklogLecturesSenseursPassifs():
 
         print("Operation aggregation: %s" % str(operation))
 
-        collection_transactions = self.document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
+        collection_transactions = self._document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
         resultat_curseur = collection_transactions.aggregate(operation)
 
         liste_transaction_senseurs = []
@@ -562,7 +562,7 @@ class TraitementBacklogLecturesSenseursPassifs():
 
     def run_requete_genererdeclencheur_parsenseur(self, liste_senseurs):
 
-        collection_transactions = self.document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
+        collection_transactions = self._document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
 
         for transaction_senseur in liste_senseurs:
             filtre = {
