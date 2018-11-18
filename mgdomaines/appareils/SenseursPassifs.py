@@ -48,6 +48,11 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
             queue=nom_queue_senseurspassifs,
             durable=True)
 
+        # Si la Q existe deja, la purger. Le traitement du backlog est plus efficient via load du gestionnaire.
+        self.message_dao.channel.queue_purge(
+            queue=nom_queue_senseurspassifs
+        )
+
         self.message_dao.channel.queue_bind(
             exchange=self.configuration.exchange_evenements,
             queue=nom_queue_senseurspassifs,
@@ -61,6 +66,9 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
         traitement_backlog_lectures = TraitementBacklogLecturesSenseursPassifs(self.message_dao, self.document_dao)
         liste_transactions = traitement_backlog_lectures.run_requete_plusrecentetransactionlecture_parsenseur()
         traitement_backlog_lectures.run_requete_genererdeclencheur_parsenseur(liste_transactions)
+
+        # Ajouter messages declencheurs pour refaire les calculs horaires et quoditiens (moyennes, extremes)
+        traitement_backlog_lectures.declencher_calculs()
 
     def get_nom_queue(self):
         nom_millegrille = self.configuration.nom_millegrille
@@ -614,6 +622,15 @@ class TraitementBacklogLecturesSenseursPassifs():
                 }
 
                 collection_transactions.update_many(filter=filtre, update=operation)
+
+    def declencher_calculs(self):
+        # Declencher le calcule des moyennes horaires
+        processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsMAJHoraire"
+        self.demarreur_processus.demarrer_processus(processus, {})
+
+        processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsMAJQuotidienne"
+        self.demarreur_processus.demarrer_processus(processus, {})
+
 
 # Processus pour mettre a jour un document de noeud suite a une transaction de senseur passif
 class ProcessusMAJNoeudsSenseurPassif(MGProcessus):
