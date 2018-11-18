@@ -1,6 +1,6 @@
 # Module avec les classes de donnees, processus et gestionnaire de sous domaine mgdomaines.appareils.SenseursPassifs
 from millegrilles import Constantes
-from millegrilles.Domaines import GestionnaireDomaine
+from millegrilles.Domaines import GestionnaireDomaine, MGPProcessusDemarreur
 from millegrilles.processus.MGProcessus import MGProcessus, MGProcessusTransaction
 from millegrilles.dao.MessageDAO import BaseCallback
 from bson.objectid import ObjectId
@@ -524,12 +524,21 @@ class TraitementBacklogLecturesSenseursPassifs():
         self._message_dao = message_dao
         self._document_dao = document_dao
 
+        self.demarreur_processus = MGPProcessusDemarreur(self._message_dao, self._document_dao)
+
+    ''' 
+    Identifie la transaction de lecture la plus recente pour chaque noeud/senseur. Cherche uniquement dans
+    les transactions qui ne sont pas marquees comme traitees. 
+    
+    :returns: Liste de noeud/senseurs avec temps_lecture de la transaction la plus recente. 
+    '''
     def run_requete_plusrecentetransactionlecture_parsenseur(self):
         filtre = {
             'info-transaction.domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE,
             'evenements.transaction_traitee': {'$exists': False}
         }
 
+        # Trouver la request la plus recente pour chaque noeud/senseur.
         regroupement = {
             '_id': {
                 'noeud': '$charge-utile.noeud',
@@ -560,6 +569,14 @@ class TraitementBacklogLecturesSenseursPassifs():
 
         return liste_transaction_senseurs
 
+    '''
+    Identifier le _id des transaction les plus recentes pour chaque noeud/senseur et lance un message pour
+    effectuer le traitement.
+    
+    Marque toutes les transactions anterieures comme traitees (elles n'ont aucun impact).
+    
+    :param liste_senseurs: Liste des senseurs avec temps_lecture de la plus recente transaction pour chaque.
+    '''
     def run_requete_genererdeclencheur_parsenseur(self, liste_senseurs):
 
         collection_transactions = self._document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
@@ -578,6 +595,12 @@ class TraitementBacklogLecturesSenseursPassifs():
             for res in resultat_curseur:
                 # Preparer un message pour declencher la transaction
                 print("Transaction a declencher: _id = %s" % str(res['_id']))
+                processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsLecture"
+                message_dict = {
+                    Constantes.TRANSACTION_MESSAGE_LIBELLE_ID_MONGO: str(res['_id']),
+                    'senseur': transaction_senseur
+                }
+                self.demarreur_processus.demarrer_processus(processus, message_dict)
 
                 # Marquer toutes les transaction anterieures comme traitees
                 filtre['evenements.transaction_traitee'] = {'$exists': False}
