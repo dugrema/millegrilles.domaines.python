@@ -32,6 +32,7 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
         super().__init__()
         self._traitement_lecture = None
         self.traiter_transaction = None   # Override de la methode super().traiter_transaction
+        self._traitement_backlog_lectures = None
 
     def configurer(self):
         super().configurer()
@@ -57,7 +58,9 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
         # Il faut trouver la transaction la plus recente pour chaque noeud/senseur et relancer une transaction
         # de persistance.
         # Toutes les autres transactions non-traitees de SenseursPassifs.Lecture peuvent etre marquees comme traitees.
-        pass
+        traitement_backlog_lectures = TraitementBacklogLecturesSenseursPassifs(self.message_dao, self.document_dao)
+        liste_transactions = traitement_backlog_lectures.run_requete_plusrecentetransactionlecture_parsenseur()
+        traitement_backlog_lectures.run_requete_genererdeclencheur_parsenseur(liste_transactions)
 
     def get_nom_queue(self):
         nom_millegrille = self.configuration.nom_millegrille
