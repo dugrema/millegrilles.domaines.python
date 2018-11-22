@@ -1,6 +1,5 @@
 from millegrilles.Declencheur import Declencheur
 from mgdomaines.appareils.SenseursPassifs import SenseursPassifsConstantes
-import sys
 import datetime
 import argparse
 
