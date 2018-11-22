@@ -3,6 +3,7 @@ from mgdomaines.appareils.SenseursPassifs import SenseursPassifsConstantes
 import datetime
 import argparse
 
+
 class DeclencheurAppareils(Declencheur):
 
     NOM_DOMAINE = 'mgdomaines.appareils'
@@ -33,6 +34,7 @@ class DeclencheurAppareils(Declencheur):
         methode_declencheur = getattr(self, args.m[0])
         # Executer la methode
         methode_declencheur()
+
 
 # **** MAIN ****
 DeclencheurAppareils().executer_methode()

@@ -1,11 +1,13 @@
 # Module avec les classes de donnees, processus et gestionnaire de sous domaine mgdomaines.appareils.SenseursPassifs
+import datetime
+import socket
+
 from millegrilles import Constantes
 from millegrilles.Domaines import GestionnaireDomaine, MGPProcessusDemarreur
 from millegrilles.processus.MGProcessus import MGProcessus, MGProcessusTransaction
 from millegrilles.dao.MessageDAO import BaseCallback
-from millegrilles.transaction import GenerateurTransaction
+from millegrilles.transaction.GenerateurTransaction import GenerateurTransaction
 from bson.objectid import ObjectId
-import datetime
 
 
 # Constantes pour SenseursPassifs
@@ -647,13 +649,28 @@ class ProcessusMAJNoeudsSenseurPassif(MGProcessus):
 
 
 # Producteur de transactions pour les SenseursPassifs.
-class ProducteurTransaction(GenerateurTransaction):
+class ProducteurTransactionSenseursPassifs(GenerateurTransaction):
 
-    def __init__(self, noeud):
+    def __init__(self, noeud=socket.getfqdn()):
         super().__init__()
         self._noeud = noeud
 
     def transmettre_lecture_senseur(self, dict_lecture):
         # Preparer le dictionnaire a transmettre pour la lecture
+        message = dict_lecture.copy()
 
-        self.soumettre_transaction()
+        # Verifier valeurs qui doivent etre presentes
+        if message.get(SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR) is None:
+            raise ValueError("L'identificateur du senseur (%s) doit etre fourni." %
+                             SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR)
+        if message.get(SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE) is None:
+            raise ValueError("Le temps de la lecture (%s) doit etre fourni." %
+                             SenseursPassifsConstantes.TRANSACTION_DATE_LECTURE)
+
+        # Ajouter le noeud s'il n'a pas ete fourni
+        if message.get(SenseursPassifsConstantes.TRANSACTION_NOEUD) is None:
+            message[SenseursPassifsConstantes.TRANSACTION_NOEUD] = self._noeud
+
+        uuid_transaction = self.soumettre_transaction(message, SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE)
+
+        return uuid_transaction
