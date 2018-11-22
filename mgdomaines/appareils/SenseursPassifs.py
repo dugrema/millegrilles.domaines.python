@@ -3,6 +3,7 @@ from millegrilles import Constantes
 from millegrilles.Domaines import GestionnaireDomaine, MGPProcessusDemarreur
 from millegrilles.processus.MGProcessus import MGProcessus, MGProcessusTransaction
 from millegrilles.dao.MessageDAO import BaseCallback
+from millegrilles.transaction import GenerateurTransaction
 from bson.objectid import ObjectId
 import datetime
 
@@ -24,6 +25,7 @@ class SenseursPassifsConstantes:
 
     EVENEMENT_MAJ_HORAIRE = 'miseajour.horaire'
     EVENEMENT_MAJ_QUOTIDIENNE = 'miseajour.quotidienne'
+
 
 # Gestionnaire pour le domaine mgdomaines.appareils.SenseursPassifs.
 class GestionnaireSenseursPassifs(GestionnaireDomaine):
@@ -69,6 +71,9 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
 
         # Ajouter messages declencheurs pour refaire les calculs horaires et quoditiens (moyennes, extremes)
         traitement_backlog_lectures.declencher_calculs()
+
+    def traiter_transaction(self, ch, method, properties, body):
+        raise NotImplementedError("N'est pas implemente")
 
     def get_nom_queue(self):
         nom_millegrille = self.configuration.nom_millegrille
@@ -152,7 +157,8 @@ class ProducteurDocumentSenseurPassif:
         print("Donnees senseur passif: selection=%s, operation=%s" % (str(selection), str(operation)))
 
         collection = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
-        document_senseur = collection.find_one_and_update(filter=selection, update=operation, upsert=False, fields="_id:1")
+        document_senseur = collection.find_one_and_update(
+            filter=selection, update=operation, upsert=False, fields="_id:1")
 
         # Verifier si un document a ete modifie.
         if document_senseur is None:
@@ -387,6 +393,7 @@ class ProducteurDocumentSenseurPassif:
 
         return document_ids
 
+
 # Classe qui gere le document pour un noeud. Supporte une mise a jour incrementale des donnees.
 class ProducteurDocumentNoeud:
 
@@ -529,7 +536,7 @@ class ProcessusTransactionSenseursPassifsMAJQuotidienne(MGProcessus):
         self.set_etape_suivante()  # Rien a faire, etape finale
 
 
-class TraitementBacklogLecturesSenseursPassifs():
+class TraitementBacklogLecturesSenseursPassifs:
 
     def __init__(self, message_dao, document_dao):
         self._message_dao = message_dao
@@ -637,3 +644,16 @@ class ProcessusMAJNoeudsSenseurPassif(MGProcessus):
 
     def __init__(self, controleur, evenement):
         super().__init__(controleur, evenement)
+
+
+# Producteur de transactions pour les SenseursPassifs.
+class ProducteurTransaction(GenerateurTransaction):
+
+    def __init__(self, noeud):
+        super().__init__()
+        self._noeud = noeud
+
+    def transmettre_lecture_senseur(self, dict_lecture):
+        # Preparer le dictionnaire a transmettre pour la lecture
+
+        self.soumettre_transaction()
