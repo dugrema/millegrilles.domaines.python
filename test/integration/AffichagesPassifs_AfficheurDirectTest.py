@@ -20,8 +20,8 @@ class AfficheurDocumentMAJDirecteTest(AfficheurDocumentMAJDirecte):
         return {"_id": ObjectId("5bf80ce3e597dd0008fe557b")}
 
     def test(self):
-        for document in self.documents:
-            print("Document charge: %s" % str(document))
+        for document_id in self.documents:
+            print("Document charge: %s" % str(self.documents[document_id]))
 
 
 # Demarrer test
