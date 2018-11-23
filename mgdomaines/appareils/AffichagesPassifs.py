@@ -120,7 +120,7 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
 
     def set_horloge_event(self):
         while not self._stop_event.is_set():
-            print("Tick")
+            # print("Tick")
             self._horloge_event.set()
             self._stop_event.wait(1)
 
@@ -155,7 +155,7 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
                 # Remplacer contenu ecran
                 self.maj_affichage(lignes_affichage)
 
-                print("Affichage: %s" % lignes_affichage)
+                # print("Affichage: %s" % lignes_affichage)
                 self._stop_event.wait(5)
 
     def afficher_heure(self):
@@ -171,7 +171,7 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
             timestring = now.strftime('%H:%M:%S')
 
             lignes_affichage = [datestring, timestring]
-            print("Horloge: %s" % str(lignes_affichage))
+            # print("Horloge: %s" % str(lignes_affichage))
             self.maj_affichage(lignes_affichage)
 
             # Attendre 1 seconde

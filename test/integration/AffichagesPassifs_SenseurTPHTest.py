@@ -1,7 +1,6 @@
 from mgdomaines.appareils.AffichagesPassifs import AfficheurSenseurPassifTemperatureHumiditePression
 from millegrilles.dao.Configuration import TransactionConfiguration
 from millegrilles.dao.DocumentDAO import MongoDAO
-from bson import ObjectId
 import time
 import traceback
 
@@ -22,6 +21,14 @@ class AfficheurSenseurPassifTemperatureHumiditePressionTest(AfficheurSenseurPass
         for document_id in self.get_documents():
             print("Document charge: %s" % str(self._documents[document_id]))
 
+    def maj_affichage(self, lignes_affichage):
+        super().maj_affichage(lignes_affichage)
+
+        # print("maj_affichage: (%d lignes) = %s" % (len(lignes_affichage), str(lignes_affichage)))
+
+        for no in range(0, len(lignes_affichage)):
+            print("maj_affichage Ligne %d: %s" % (no+1, str(lignes_affichage[no])))
+
 
 # Demarrer test
 
@@ -30,8 +37,8 @@ try:
     print("Test debut")
     test.start()
 
-    test.test()
-    time.sleep(16)
+    # test.test()
+    time.sleep(61)
 
     print("Test termine")
 except Exception as e:
