@@ -4,7 +4,6 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/../MilleGrilles.consignation.python/.idea/MilleGrilles.consignation.python.iml" filepath="$PROJECT_DIR$/../MilleGrilles.consignation.python/.idea/MilleGrilles.consignation.python.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/MilleGrilles.domaines.python.iml" filepath="$PROJECT_DIR$/.idea/MilleGrilles.domaines.python.iml" />
-      <module fileurl="file://$USER_HOME$/git/MilleGrillesSenseurs.git/rpi/nrf24hub-python/.idea/nrf24hub-python.iml" filepath="$USER_HOME$/git/MilleGrillesSenseurs.git/rpi/nrf24hub-python/.idea/nrf24hub-python.iml" />
       <module fileurl="file://$USER_HOME$/git/MilleGrilles.raspberrypi/python/.idea/python.iml" filepath="$USER_HOME$/git/MilleGrilles.raspberrypi/python/.idea/python.iml" />
     </modules>
   </component>

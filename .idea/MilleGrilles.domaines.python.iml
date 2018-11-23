@@ -8,7 +8,6 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="MilleGrilles.consignation.python" />
-    <orderEntry type="module" module-name="nrf24hub-python" />
     <orderEntry type="module" module-name="python" />
   </component>
   <component name="TestRunnerService">
