@@ -651,8 +651,8 @@ class ProcessusMAJNoeudsSenseurPassif(MGProcessus):
 # Producteur de transactions pour les SenseursPassifs.
 class ProducteurTransactionSenseursPassifs(GenerateurTransaction):
 
-    def __init__(self, noeud=socket.getfqdn()):
-        super().__init__()
+    def __init__(self, configuration=None, message_dao=None, noeud=socket.getfqdn()):
+        super().__init__(configuration, message_dao)
         self._noeud = noeud
 
     def transmettre_lecture_senseur(self, dict_lecture):
