@@ -2,14 +2,19 @@ from mgdomaines.appareils.AffichagesPassifs import AfficheurDocumentMAJDirecte
 from millegrilles.dao.Configuration import TransactionConfiguration
 from millegrilles.dao.DocumentDAO import MongoDAO
 from bson import ObjectId
+import time
 
 class AfficheurDocumentMAJDirecteTest(AfficheurDocumentMAJDirecte):
 
     def __init__(self):
-        super().__init__()
+        configuration = TransactionConfiguration()
+        configuration.loadEnvironment()
+        document_dao = MongoDAO(configuration)
+        document_dao.connecter()
+        super().__init__(configuration, document_dao, intervalle_secs=5)
 
     def get_collection(self):
-        return self.document_dao.get_collection('mathieu')
+        return self._document_dao.get_collection('mathieu')
 
     def get_filtre(self):
         return {"_id": ObjectId("5bf80ce3e597dd0008fe557b")}
@@ -20,14 +25,18 @@ class AfficheurDocumentMAJDirecteTest(AfficheurDocumentMAJDirecte):
 
 
 # Demarrer test
-configuration = TransactionConfiguration()
-configuration.loadEnvironment()
-document_dao = MongoDAO(configuration)
-document_dao.connecter()
 
 test = AfficheurDocumentMAJDirecteTest()
-test.initialiser(configuration, document_dao)
+try:
+    print("Test debut")
+    test.start()
 
-test.test()
+    test.test()
+    time.sleep(16)
 
-document_dao.deconnecter()
+    print("Test termine")
+except Exception as e:
+    print("Erreur main: %s" % e)
+finally:
+    test.fermer()
+    test._document_dao.deconnecter()
