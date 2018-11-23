@@ -1,5 +1,6 @@
 # Affichages sans interaction/boutons qui sont controles via documents ou timers.
 import traceback
+import datetime
 from threading import Thread, Event
 
 from pymongo.errors import OperationFailure
@@ -61,7 +62,7 @@ class AfficheurDocumentMAJDirecte:
         for document in curseur_documents:
             # Sauvegarder le document le plus recent
             self._documents[document.get('_id')] = document
-            #print("#### Document rafraichi: %s" % str(document))
+            # print("#### Document rafraichi: %s" % str(document))
 
     def get_documents(self):
         return self._documents
@@ -92,6 +93,8 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
         super().__init__(configuration, document_dao, intervalle_secs)
         self._document_ids = document_ids
         self._thread_affichage = None
+        self._thread_horloge = None
+        self._horloge_event = Event()  # Evenement pour synchroniser l'heure
         self._lignes_ecran = None
 
     def get_collection(self):
@@ -107,11 +110,19 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
 
     def start(self):
         super().start()  # Demarre thread de lecture de documents
+        self._thread_horloge = Thread(target=self.set_horloge_event)
+        self._thread_horloge.start()
 
         # Thread.start
         self._thread_affichage = Thread(target=self.run_affichage)
         self._thread_affichage.start()
         print("AfficheurDocumentMAJDirecte: thread demarree")
+
+    def set_horloge_event(self):
+        while not self._stop_event.is_set():
+            print("Tick")
+            self._horloge_event.set()
+            self._stop_event.wait(1)
 
     def run_affichage(self):
 
@@ -121,11 +132,12 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
                 self.afficher_tph()
 
                 # Afficher heure et date pendant 5 secondes
+                self.afficher_heure()
 
             except Exception as e:
                 print("Erreur durant affichage: %s" % str(e))
                 traceback.print_exc()
-                self._stop_event.wait(10) # Attendre 10 secondes et ressayer du debut
+                self._stop_event.wait(10)  # Attendre 10 secondes et ressayer du debut
 
     def maj_affichage(self, lignes_affichage):
         self._lignes_ecran = lignes_affichage
@@ -147,8 +159,24 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
                 self._stop_event.wait(5)
 
     def afficher_heure(self):
-        if not self._stop_event.is_set():
-            pass
+        nb_secs = 5
+        self._horloge_event.clear()
+        while not self._stop_event.is_set() and nb_secs > 0:
+            self._horloge_event.wait(1)
+            nb_secs -= 1
+
+            # Prendre heure courante, formatter
+            now = datetime.datetime.now()
+            datestring = now.strftime('%Y-%m-%d')
+            timestring = now.strftime('%H:%M:%S')
+
+            lignes_affichage = [datestring, timestring]
+            print("Horloge: %s" % str(lignes_affichage))
+            self.maj_affichage(lignes_affichage)
+
+            # Attendre 1 seconde
+            self._horloge_event.clear()
+            self._horloge_event.wait(1)
 
     def generer_lignes(self):
         lignes = []
