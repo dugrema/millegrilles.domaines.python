@@ -14,21 +14,21 @@ class AfficheurDocumentMAJDirecte:
     # :params intervalle_secs: Intervalle (secondes) entre rafraichissements si watch ne fonctionne pas.
     def __init__(self, configuration, document_dao, intervalle_secs=30):
         self._configuration = configuration
-        self.document_dao = document_dao
+        self._document_dao = document_dao
         self._documents = dict()
         self._intervalle_secs = intervalle_secs
         self._stop_event = Event()  # Evenement qui indique qu'on arrete la thread
 
         self._collection = None
         self._curseur_changements = None  # Si None, on fonctionne par timer
-        self._thread = None
+        self._thread_maj_document = None
 
     def start(self):
         self.initialiser_documents()
 
         # Thread.start
-        self._thread = Thread(target=self.run)
-        self._thread.start()
+        self._thread_maj_document = Thread(target=self.run_maj_document)
+        self._thread_maj_document.start()
         print("AfficheurDocumentMAJDirecte: thread demarree")
 
     def fermer(self):
@@ -61,12 +61,12 @@ class AfficheurDocumentMAJDirecte:
         for document in curseur_documents:
             # Sauvegarder le document le plus recent
             self._documents[document.get('_id')] = document
-            print("#### Document rafraichi: %s" % str(document))
+            #print("#### Document rafraichi: %s" % str(document))
 
     def get_documents(self):
         return self._documents
 
-    def run(self):
+    def run_maj_document(self):
 
         while not self._stop_event.is_set():
             try:
@@ -91,9 +91,11 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
     def __init__(self, configuration, document_dao, document_ids, intervalle_secs=30):
         super().__init__(configuration, document_dao, intervalle_secs)
         self._document_ids = document_ids
+        self._thread_affichage = None
+        self._lignes_ecran = None
 
     def get_collection(self):
-        return self.document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
+        return self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
 
     def get_filtre(self):
         document_object_ids = []
@@ -102,3 +104,66 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
 
         filtre = {"_id": {'$in': document_object_ids}}
         return filtre
+
+    def start(self):
+        super().start()  # Demarre thread de lecture de documents
+
+        # Thread.start
+        self._thread_affichage = Thread(target=self.run_affichage)
+        self._thread_affichage.start()
+        print("AfficheurDocumentMAJDirecte: thread demarree")
+
+    def run_affichage(self):
+
+        while not self._stop_event.is_set():  # Utilise _stop_event de la superclasse pour synchroniser l'arret
+
+            try:
+                self.afficher_tph()
+
+                # Afficher heure et date pendant 5 secondes
+
+            except Exception as e:
+                print("Erreur durant affichage: %s" % str(e))
+                traceback.print_exc()
+                self._stop_event.wait(10) # Attendre 10 secondes et ressayer du debut
+
+    def maj_affichage(self, lignes_affichage):
+        self._lignes_ecran = lignes_affichage
+
+    def afficher_tph(self):
+        if not self._stop_event.is_set():
+            lignes = self.generer_lignes()
+            lignes.reverse()  # On utilise pop(), premieres lectures vont a la fin
+
+            while len(lignes) > 0:
+                lignes_affichage = [lignes.pop()]
+                if len(lignes) > 0:
+                    lignes_affichage.append(lignes.pop())
+
+                # Remplacer contenu ecran
+                self.maj_affichage(lignes_affichage)
+
+                print("Affichage: %s" % lignes_affichage)
+                self._stop_event.wait(5)
+
+    def afficher_heure(self):
+        if not self._stop_event.is_set():
+            pass
+
+    def generer_lignes(self):
+        lignes = []
+        pression = None
+        for senseur_id in self._documents:
+            senseur = self._documents[senseur_id]
+            info_loc_temp_hum = "{location} {temperature:2.1f}C/{humidite:2.0f}%".format(**senseur)
+            lignes.append(info_loc_temp_hum)
+
+            if pression is None and senseur.get('pression') is not None:
+                pression = senseur.get('pression')
+
+        if pression is not None:
+            lecture = {'pression': pression, 'tendance': '?'}
+            contenu = "Press: {pression:3.1f}kPa{tendance}".format(**lecture)
+            lignes.append(contenu)
+
+        return lignes

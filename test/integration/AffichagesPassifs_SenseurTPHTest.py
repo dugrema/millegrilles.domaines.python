@@ -39,4 +39,4 @@ except Exception as e:
     traceback.print_exc()
 finally:
     test.fermer()
-    test.document_dao.deconnecter()
+    test._document_dao.deconnecter()

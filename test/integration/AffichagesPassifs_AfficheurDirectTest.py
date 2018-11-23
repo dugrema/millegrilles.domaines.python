@@ -15,7 +15,7 @@ class AfficheurDocumentMAJDirecteTest(AfficheurDocumentMAJDirecte):
         super().__init__(configuration, document_dao, intervalle_secs=5)
 
     def get_collection(self):
-        return self.document_dao.get_collection('mathieu')
+        return self._document_dao.get_collection('mathieu')
 
     def get_filtre(self):
         return {"_id": {'$in': [ObjectId("5bf80ce3e597dd0008fe557b")]}}
@@ -40,4 +40,4 @@ except Exception as e:
     print("Erreur main: %s" % e)
 finally:
     test.fermer()
-    test.document_dao.deconnecter()
+    test._document_dao.deconnecter()
