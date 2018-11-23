@@ -3,6 +3,9 @@ import traceback
 from threading import Thread, Event
 
 from pymongo.errors import OperationFailure
+from bson import ObjectId
+
+from mgdomaines.appareils.SenseursPassifs import SenseursPassifsConstantes
 
 
 # Affichage qui se connecte a un ou plusieurs documents et recoit les changements live
@@ -11,20 +14,20 @@ class AfficheurDocumentMAJDirecte:
     # :params intervalle_secs: Intervalle (secondes) entre rafraichissements si watch ne fonctionne pas.
     def __init__(self, configuration, document_dao, intervalle_secs=30):
         self._configuration = configuration
-        self._document_dao = document_dao
-        self._collection = None
-        self.documents = dict()
-        self._curseur_changements = None  # Si None, on fonctionne par timer
+        self.document_dao = document_dao
+        self._documents = dict()
         self._intervalle_secs = intervalle_secs
+        self._stop_event = Event()  # Evenement qui indique qu'on arrete la thread
+
+        self._collection = None
+        self._curseur_changements = None  # Si None, on fonctionne par timer
         self._thread = None
-        self._stop_event = None
 
     def start(self):
         self.initialiser_documents()
 
         # Thread.start
         self._thread = Thread(target=self.run)
-        self._stop_event = Event()  # Evenement qui indique qu'on arrete la thread
         self._thread.start()
         print("AfficheurDocumentMAJDirecte: thread demarree")
 
@@ -57,8 +60,11 @@ class AfficheurDocumentMAJDirecte:
         curseur_documents = self._collection.find(filtre)
         for document in curseur_documents:
             # Sauvegarder le document le plus recent
-            self.documents[document.get('_id')] = document
+            self._documents[document.get('_id')] = document
             print("#### Document rafraichi: %s" % str(document))
+
+    def get_documents(self):
+        return self._documents
 
     def run(self):
 
@@ -76,3 +82,23 @@ class AfficheurDocumentMAJDirecte:
                 print("AfficheurDocumentMAJDirecte: Erreur %s" % str(e))
                 traceback.print_exc()
                 self._stop_event.wait(self._intervalle_secs)
+
+
+# Classe qui charge des senseurs pour afficher temperature, humidite, pression/tendance
+# pour quelques senseurs passifs.
+class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDirecte):
+
+    def __init__(self, configuration, document_dao, document_ids, intervalle_secs=30):
+        super().__init__(configuration, document_dao, intervalle_secs)
+        self._document_ids = document_ids
+
+    def get_collection(self):
+        return self.document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
+
+    def get_filtre(self):
+        document_object_ids = []
+        for doc_id in self._document_ids:
+            document_object_ids.append(ObjectId(doc_id))
+
+        filtre = {"_id": {'$in': document_object_ids}}
+        return filtre

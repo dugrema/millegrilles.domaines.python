@@ -1,24 +1,22 @@
-from mgdomaines.appareils.AffichagesPassifs import AfficheurDocumentMAJDirecte
+from mgdomaines.appareils.AffichagesPassifs import AfficheurSenseurPassifTemperatureHumiditePression
 from millegrilles.dao.Configuration import TransactionConfiguration
 from millegrilles.dao.DocumentDAO import MongoDAO
 from bson import ObjectId
 import time
+import traceback
 
 
-class AfficheurDocumentMAJDirecteTest(AfficheurDocumentMAJDirecte):
+class AfficheurSenseurPassifTemperatureHumiditePressionTest(AfficheurSenseurPassifTemperatureHumiditePression):
 
     def __init__(self):
         configuration = TransactionConfiguration()
         configuration.loadEnvironment()
         document_dao = MongoDAO(configuration)
         document_dao.connecter()
-        super().__init__(configuration, document_dao, intervalle_secs=5)
 
-    def get_collection(self):
-        return self.document_dao.get_collection('mathieu')
+        document_ids = ['5bef321b82cc2cb5ab0e33c2', '5bef323482cc2cb5ab0e995d']
 
-    def get_filtre(self):
-        return {"_id": {'$in': [ObjectId("5bf80ce3e597dd0008fe557b")]}}
+        super().__init__(configuration, document_dao, document_ids=document_ids, intervalle_secs=5)
 
     def test(self):
         for document_id in self.get_documents():
@@ -27,7 +25,7 @@ class AfficheurDocumentMAJDirecteTest(AfficheurDocumentMAJDirecte):
 
 # Demarrer test
 
-test = AfficheurDocumentMAJDirecteTest()
+test = AfficheurSenseurPassifTemperatureHumiditePressionTest()
 try:
     print("Test debut")
     test.start()
@@ -38,6 +36,7 @@ try:
     print("Test termine")
 except Exception as e:
     print("Erreur main: %s" % e)
+    traceback.print_exc()
 finally:
     test.fermer()
     test.document_dao.deconnecter()
