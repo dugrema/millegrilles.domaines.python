@@ -58,7 +58,7 @@ class AfficheurDocumentMAJDirecte:
         filtre_watch = dict()
         # Rebatir le filtre avec fullDocument
         for cle in filtre:
-            cle_watch = 'fullDocument.%s' % cle
+            cle_watch = 'documentKey.%s' % cle
             filtre_watch[cle_watch] = filtre[cle]
 
         # Tenter d'activer watch par _id pour les documents
@@ -104,9 +104,21 @@ class AfficheurDocumentMAJDirecte:
                 if not self._watch_desactive and self._curseur_changements is not None:
                     print("Attente changement")
                     valeur = next(self._curseur_changements)
-                    doc_update = valeur['fullDocument']
-                    print("Valeur changee: %s" % str(doc_update))
-                    self._documents[doc_update['_id']] = doc_update
+
+                    doc_id = valeur['documentKey']['_id']
+                    if valeur.get('fullDocument') is not None:
+                        print("Recu full document: %s" % str(valeur))
+                        self._documents[doc_id] = valeur['fullDocument']
+                    elif valeur.get('updateDescription') is not None:
+                        print("Recu MAJ: %s" % str(valeur))
+                        updated_fields = valeur['updateDescription']['updatedFields']
+                        self._documents[doc_id].update(updated_fields)
+                    else:
+                        # Mise a jour inconnue. On va recharger le document au complet pour le synchroniser
+                        print("Update de type inconnu, on recharge le document: %s" % str(valeur))
+                        full_documents = self._collection.find({'_id': doc_id})
+                        for full_document in full_documents:
+                            self._documents[doc_id] = full_document
 
                 else:
                     self.charger_documents()

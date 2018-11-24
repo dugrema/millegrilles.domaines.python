@@ -11,9 +11,9 @@ class AfficheurSenseurPassifTemperatureHumiditePressionTest(AfficheurSenseurPass
         self.configuration = TransactionConfiguration()
         self.configuration.loadEnvironment()
         self.document_dao = MongoDAO(self.configuration)
-        # self.document_dao.connecter()  # Tester reconnexion
+        self.document_dao.connecter()  # Tester reconnexion
 
-        self.document_ids = ['5bf954458343c70008dafd87']
+        self.document_ids = ['5bf98475a9f65540c1bcc016']
 
         super().__init__(self.configuration, self.document_dao, document_ids=self.document_ids, intervalle_secs=5)
 
