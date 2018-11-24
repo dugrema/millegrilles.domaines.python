@@ -102,15 +102,15 @@ class AfficheurDocumentMAJDirecte:
                 # Si on a un _curseur_changements, on fait juste ecouter les changements du replice sets
                 # Si on n'a pas de curseur, on utiliser un timer (_intervalle_sec) pour recharger avec Mongo
                 if not self._watch_desactive and self._curseur_changements is not None:
-                    print("Attente changement")
+                    # print("Attente changement")
                     valeur = next(self._curseur_changements)
 
                     doc_id = valeur['documentKey']['_id']
                     if valeur.get('fullDocument') is not None:
-                        print("Recu full document: %s" % str(valeur))
+                        # print("Recu full document: %s" % str(valeur))
                         self._documents[doc_id] = valeur['fullDocument']
                     elif valeur.get('updateDescription') is not None:
-                        print("Recu MAJ: %s" % str(valeur))
+                        # print("Recu MAJ: %s" % str(valeur))
                         updated_fields = valeur['updateDescription']['updatedFields']
                         self._documents[doc_id].update(updated_fields)
                     else:
