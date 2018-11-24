@@ -8,18 +8,29 @@ import traceback
 class AfficheurSenseurPassifTemperatureHumiditePressionTest(AfficheurSenseurPassifTemperatureHumiditePression):
 
     def __init__(self):
-        configuration = TransactionConfiguration()
-        configuration.loadEnvironment()
-        document_dao = MongoDAO(configuration)
-        document_dao.connecter()
+        self.configuration = TransactionConfiguration()
+        self.configuration.loadEnvironment()
+        self.document_dao = MongoDAO(self.configuration)
+        # self.document_dao.connecter()  # Tester reconnexion
 
-        document_ids = ['5bf954458343c70008dafd87']
+        self.document_ids = ['5bf954458343c70008dafd87']
 
-        super().__init__(configuration, document_dao, document_ids=document_ids, intervalle_secs=5)
+        super().__init__(self.configuration, self.document_dao, document_ids=self.document_ids, intervalle_secs=5)
 
     def test(self):
         for document_id in self.get_documents():
             print("Document charge: %s" % str(self._documents[document_id]))
+
+        while True:
+            if not self.document_dao.est_enligne():
+                try:
+                    self.document_dao.connecter()
+                    print("TEST: Connexion a Mongo etablie")
+                except Exception as ce:
+                    print("Erreur reconnexion Mongo: %s" % str(ce))
+                    traceback.print_exc()
+
+            time.sleep(10)
 
     def maj_affichage(self, lignes_affichage):
         super().maj_affichage(lignes_affichage)
@@ -37,8 +48,7 @@ try:
     print("Test debut")
     test.start()
 
-    # test.test()
-    time.sleep(300)
+    test.test()
 
     print("Test termine")
 except Exception as e:

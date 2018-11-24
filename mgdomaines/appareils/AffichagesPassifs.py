@@ -3,7 +3,7 @@ import traceback
 import datetime
 from threading import Thread, Event
 
-from pymongo.errors import OperationFailure
+from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
 from bson import ObjectId
 
 from mgdomaines.appareils.SenseursPassifs import SenseursPassifsConstantes
@@ -18,14 +18,24 @@ class AfficheurDocumentMAJDirecte:
         self._document_dao = document_dao
         self._documents = dict()
         self._intervalle_secs = intervalle_secs
+        self._intervalle_erreurs_secs = 60  # Intervalle lors d'erreurs
         self._stop_event = Event()  # Evenement qui indique qu'on arrete la thread
 
         self._collection = None
         self._curseur_changements = None  # Si None, on fonctionne par timer
+        self._watch_desactive = False  # Si true, on utilise watch. Sinon on utilise le timer
         self._thread_maj_document = None
 
     def start(self):
-        self.initialiser_documents()
+        try:
+            self.initialiser_documents()
+        except ServerSelectionTimeoutError as sste:
+            print("AffichagesPassifs: Erreur de connexion a Mongo. "
+                  "On va demarrer quand meme et connecter plus tard. %s" % str(sste))
+        except TypeError as te:
+            print("AffichagesPassifs: Erreur de connexion a Mongo. "
+                  "On va demarrer quand meme et connecter plus tard. %s" % str(te))
+
 
         # Thread.start
         self._thread_maj_document = Thread(target=self.run_maj_document)
@@ -56,12 +66,14 @@ class AfficheurDocumentMAJDirecte:
             match = {
                 '$match': filtre_watch
              }
-            # match = {"$match": {"fullDocument": {"_id": "5bf954458343c70008dafd87"}}}
             pipeline = [match]
             print("Pipeline watch: %s" % str(pipeline))
             self._curseur_changements = self._collection.watch(pipeline)
+            self._watch_desactive = False  # S'assurer qu'on utilise la fonctionnalite watch
+
         except OperationFailure as opf:
             print("Erreur activation watch, on fonctionne par timer: %s" % str(opf))
+            self._watch_desactive = True
 
         self.charger_documents()  # Charger une version initiale des documents
 
@@ -81,22 +93,43 @@ class AfficheurDocumentMAJDirecte:
 
         while not self._stop_event.is_set():
             try:
+                # Verifier s'il faut se reconnecter
+                if self._collection is None:
+                    # Il faut se reconnecter
+                    self.initialiser_documents()  # Reconnecte la collection, watch et recharge les documents
+
                 # Executer la boucle de rafraichissement. Il y a deux comportements:
                 # Si on a un _curseur_changements, on fait juste ecouter les changements du replice sets
                 # Si on n'a pas de curseur, on utiliser un timer (_intervalle_sec) pour recharger avec Mongo
-                if self._curseur_changements is not None:
+                if not self._watch_desactive and self._curseur_changements is not None:
                     print("Attente changement")
                     valeur = next(self._curseur_changements)
                     doc_update = valeur['fullDocument']
                     print("Valeur changee: %s" % str(doc_update))
                     self._documents[doc_update['_id']] = doc_update
+
                 else:
                     self.charger_documents()
                     self._stop_event.wait(self._intervalle_secs)
+
+            except ServerSelectionTimeoutError as sste:
+                print("AffichagesPassifs: perte de connexion a Mongo: %s" % str(sste))
+                # L'erreur vient de la connexion, on va tenter d'aller chercher la collection/curseur a nouveau
+                self._collection = None
+                self._curseur_changements = None
+
+                self._stop_event.wait(self._intervalle_erreurs_secs)  # On attend avant de se reconnecter
+
             except Exception as e:
-                print("AfficheurDocumentMAJDirecte: Erreur %s" % str(e))
+                print("AfficheurDocumentMAJDirecte: Exception %s" % str(e))
                 traceback.print_exc()
-                self._stop_event.wait(self._intervalle_secs)
+
+                # L'erreur vient peut-etre de la connexion, on va tenter d'aller chercher
+                # la collection/curseur plus tard.
+                self._collection = None
+                self._curseur_changements = None
+
+                self._stop_event.wait(self._intervalle_erreurs_secs)  # On attend avant de se reconnecter
 
 
 # Classe qui charge des senseurs pour afficher temperature, humidite, pression/tendance
