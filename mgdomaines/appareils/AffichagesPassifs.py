@@ -45,11 +45,21 @@ class AfficheurDocumentMAJDirecte:
         self._collection = self.get_collection()
         filtre = self.get_filtre()
 
+        filtre_watch = dict()
+        # Rebatir le filtre avec fullDocument
+        for cle in filtre:
+            cle_watch = 'fullDocument.%s' % cle
+            filtre_watch[cle_watch] = filtre[cle]
+
         # Tenter d'activer watch par _id pour les documents
         try:
-            match = {"$match": filtre}
+            match = {
+                '$match': filtre_watch
+             }
+            # match = {"$match": {"fullDocument": {"_id": "5bf954458343c70008dafd87"}}}
             pipeline = [match]
-            self._curseur_changements = self._collection.watch(pipeline=pipeline)
+            print("Pipeline watch: %s" % str(pipeline))
+            self._curseur_changements = self._collection.watch(pipeline)
         except OperationFailure as opf:
             print("Erreur activation watch, on fonctionne par timer: %s" % str(opf))
 
@@ -62,7 +72,7 @@ class AfficheurDocumentMAJDirecte:
         for document in curseur_documents:
             # Sauvegarder le document le plus recent
             self._documents[document.get('_id')] = document
-            # print("#### Document rafraichi: %s" % str(document))
+            print("#### Document rafraichi: %s" % str(document))
 
     def get_documents(self):
         return self._documents
@@ -75,7 +85,11 @@ class AfficheurDocumentMAJDirecte:
                 # Si on a un _curseur_changements, on fait juste ecouter les changements du replice sets
                 # Si on n'a pas de curseur, on utiliser un timer (_intervalle_sec) pour recharger avec Mongo
                 if self._curseur_changements is not None:
-                    pass
+                    print("Attente changement")
+                    valeur = next(self._curseur_changements)
+                    doc_update = valeur['fullDocument']
+                    print("Valeur changee: %s" % str(doc_update))
+                    self._documents[doc_update['_id']] = doc_update
                 else:
                     self.charger_documents()
                     self._stop_event.wait(self._intervalle_secs)

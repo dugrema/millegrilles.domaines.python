@@ -13,7 +13,7 @@ class AfficheurSenseurPassifTemperatureHumiditePressionTest(AfficheurSenseurPass
         document_dao = MongoDAO(configuration)
         document_dao.connecter()
 
-        document_ids = ['5bef321b82cc2cb5ab0e33c2', '5bef323482cc2cb5ab0e995d']
+        document_ids = ['5bf954458343c70008dafd87']
 
         super().__init__(configuration, document_dao, document_ids=document_ids, intervalle_secs=5)
 
@@ -38,7 +38,7 @@ try:
     test.start()
 
     # test.test()
-    time.sleep(61)
+    time.sleep(300)
 
     print("Test termine")
 except Exception as e:
