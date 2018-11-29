@@ -1,6 +1,7 @@
 # Affichages sans interaction/boutons qui sont controles via documents ou timers.
 import traceback
 import datetime
+import logging
 from threading import Thread, Event
 
 from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
@@ -30,17 +31,17 @@ class AfficheurDocumentMAJDirecte:
         try:
             self.initialiser_documents()
         except ServerSelectionTimeoutError as sste:
-            print("AffichagesPassifs: Erreur de connexion a Mongo. "
+            logging.error("AffichagesPassifs: Erreur de connexion a Mongo. "
                   "On va demarrer quand meme et connecter plus tard. %s" % str(sste))
         except TypeError as te:
-            print("AffichagesPassifs: Erreur de connexion a Mongo. "
+            logging.error("AffichagesPassifs: Erreur de connexion a Mongo. "
                   "On va demarrer quand meme et connecter plus tard. %s" % str(te))
 
 
         # Thread.start
         self._thread_maj_document = Thread(target=self.run_maj_document)
         self._thread_maj_document.start()
-        print("AfficheurDocumentMAJDirecte: thread demarree")
+        logging.info("AfficheurDocumentMAJDirecte: thread demarree")
 
     def fermer(self):
         self._stop_event.set()
@@ -67,12 +68,12 @@ class AfficheurDocumentMAJDirecte:
                 '$match': filtre_watch
              }
             pipeline = [match]
-            print("Pipeline watch: %s" % str(pipeline))
+            logging.debug("Pipeline watch: %s" % str(pipeline))
             self._curseur_changements = self._collection.watch(pipeline)
             self._watch_desactive = False  # S'assurer qu'on utilise la fonctionnalite watch
 
         except OperationFailure as opf:
-            print("Erreur activation watch, on fonctionne par timer: %s" % str(opf))
+            logging.warning("Erreur activation watch, on fonctionne par timer: %s" % str(opf))
             self._watch_desactive = True
 
         self.charger_documents()  # Charger une version initiale des documents
@@ -84,7 +85,7 @@ class AfficheurDocumentMAJDirecte:
         for document in curseur_documents:
             # Sauvegarder le document le plus recent
             self._documents[document.get('_id')] = document
-            print("#### Document rafraichi: %s" % str(document))
+            logging.debug("#### Document rafraichi: %s" % str(document))
 
     def get_documents(self):
         return self._documents
@@ -102,20 +103,20 @@ class AfficheurDocumentMAJDirecte:
                 # Si on a un _curseur_changements, on fait juste ecouter les changements du replice sets
                 # Si on n'a pas de curseur, on utiliser un timer (_intervalle_sec) pour recharger avec Mongo
                 if not self._watch_desactive and self._curseur_changements is not None:
-                    # print("Attente changement")
+                    logging.debug("Attente changement")
                     valeur = next(self._curseur_changements)
 
                     doc_id = valeur['documentKey']['_id']
                     if valeur.get('fullDocument') is not None:
-                        # print("Recu full document: %s" % str(valeur))
+                        logging.debug("Recu full document: %s" % str(valeur))
                         self._documents[doc_id] = valeur['fullDocument']
                     elif valeur.get('updateDescription') is not None:
-                        # print("Recu MAJ: %s" % str(valeur))
+                        logging.debug("Recu MAJ: %s" % str(valeur))
                         updated_fields = valeur['updateDescription']['updatedFields']
                         self._documents[doc_id].update(updated_fields)
                     else:
                         # Mise a jour inconnue. On va recharger le document au complet pour le synchroniser
-                        print("Update de type inconnu, on recharge le document: %s" % str(valeur))
+                        logging.debug("Update de type inconnu, on recharge le document: %s" % str(valeur))
                         full_documents = self._collection.find({'_id': doc_id})
                         for full_document in full_documents:
                             self._documents[doc_id] = full_document
@@ -125,7 +126,7 @@ class AfficheurDocumentMAJDirecte:
                     self._stop_event.wait(self._intervalle_secs)
 
             except ServerSelectionTimeoutError as sste:
-                print("AffichagesPassifs: perte de connexion a Mongo: %s" % str(sste))
+                logging.warning("AffichagesPassifs: perte de connexion a Mongo: %s" % str(sste))
                 # L'erreur vient de la connexion, on va tenter d'aller chercher la collection/curseur a nouveau
                 self._collection = None
                 self._curseur_changements = None
@@ -133,7 +134,7 @@ class AfficheurDocumentMAJDirecte:
                 self._stop_event.wait(self._intervalle_erreurs_secs)  # On attend avant de se reconnecter
 
             except Exception as e:
-                print("AfficheurDocumentMAJDirecte: Exception %s" % str(e))
+                logging.warning("AfficheurDocumentMAJDirecte: Exception %s" % str(e))
                 traceback.print_exc()
 
                 # L'erreur vient peut-etre de la connexion, on va tenter d'aller chercher
@@ -175,11 +176,11 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
         # Thread.start
         self._thread_affichage = Thread(target=self.run_affichage)
         self._thread_affichage.start()
-        print("AfficheurDocumentMAJDirecte: thread demarree")
+        logging.info("AfficheurDocumentMAJDirecte: thread demarree")
 
     def set_horloge_event(self):
         while not self._stop_event.is_set():
-            # print("Tick")
+            # logging.debug("Tick")
             self._horloge_event.set()
             self._stop_event.wait(1)
 
@@ -194,7 +195,7 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
                 self.afficher_heure()
 
             except Exception as e:
-                print("Erreur durant affichage: %s" % str(e))
+                logging.error("Erreur durant affichage: %s" % str(e))
                 traceback.print_exc()
                 self._stop_event.wait(10)  # Attendre 10 secondes et ressayer du debut
 
@@ -214,7 +215,7 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
                 # Remplacer contenu ecran
                 self.maj_affichage(lignes_affichage)
 
-                # print("Affichage: %s" % lignes_affichage)
+                logging.debug("Affichage: %s" % lignes_affichage)
                 self._stop_event.wait(5)
 
     def afficher_heure(self):
@@ -230,7 +231,7 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
             timestring = now.strftime('%H:%M:%S')
 
             lignes_affichage = [datestring, timestring]
-            # print("Horloge: %s" % str(lignes_affichage))
+            logging.debug("Horloge: %s" % str(lignes_affichage))
             self.maj_affichage(lignes_affichage)
 
             # Attendre 1 seconde

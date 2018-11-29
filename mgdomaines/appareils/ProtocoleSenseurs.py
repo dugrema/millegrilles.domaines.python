@@ -1,5 +1,6 @@
 import struct
 import time
+import logging
 
 
 # **** Protocole Senseurs Passifs ****
@@ -41,13 +42,12 @@ class ProtocoleSenseursPassifsNRF24l:
             # Rejeter le message
             return None
 
-
     # Extraction des informations d'un paquet version 5 et moins
     @staticmethod
     def convertir_5moins(bytes_recus, contenu):
 
         reste_str = bytes_recus[1:7]
-        #print("Reste string V5- %d" % len(reste_str))
+        logging.debug("Reste string V5- %d" % len(reste_str))
         reste_tuple = struct.unpack('hHH', reste_str)
 
         contenu["temperature"] = reste_tuple[0] / 10.0
@@ -59,7 +59,7 @@ class ProtocoleSenseursPassifsNRF24l:
     def convertir_v6(bytes_recus, contenu):
 
         reste_str = bytes_recus[2:10]
-        #print("Reste string V6- %d" % len(reste_str))
+        logging.debug("Reste string V6- %d" % len(reste_str))
         reste_tuple = struct.unpack('hHHh', reste_str)
 
         contenu["temperature"] = reste_tuple[0] / 10.0
