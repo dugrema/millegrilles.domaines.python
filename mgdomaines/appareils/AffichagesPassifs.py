@@ -244,11 +244,11 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
         tendance = None
 
         taille_ecran = 16
-        taille_titre_tph = taille_ecran - 10
+        taille_titre_tph = taille_ecran - 11
         taille_titre_press = taille_ecran - 10
 
-        ligne_tph_format = "{location:<%d} {temperature:2.1f}C/{humidite:2.0f}%%" % taille_titre_tph
-        ligne_pression_format = "{titre: <%d} {pression:3.1f}kPa{tendance}" % taille_titre_press
+        ligne_tph_format = "{location:<%d} {temperature: 5.1f}C/{humidite:2.0f}%%" % taille_titre_tph
+        ligne_pression_format = "{titre:<%d} {pression:5.1f}kPa{tendance}" % taille_titre_press
 
         for senseur_id in self._documents:
             senseur = self._documents[senseur_id].copy()
