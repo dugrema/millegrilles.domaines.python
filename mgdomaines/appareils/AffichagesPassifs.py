@@ -241,17 +241,32 @@ class AfficheurSenseurPassifTemperatureHumiditePression(AfficheurDocumentMAJDire
     def generer_lignes(self):
         lignes = []
         pression = None
+        tendance = None
+
+        taille_ecran = 16
+        taille_titre_tph = taille_ecran - 10
+        taille_titre_press = taille_ecran - 10
+
+        ligne_tph_format = "{location:<%d} {temperature:2.1f}C/{humidite:2.0f}%%" % taille_titre_tph
+        ligne_pression_format = "{titre: <%d} {pression:3.1f}kPa{tendance}" % taille_titre_press
+
         for senseur_id in self._documents:
-            senseur = self._documents[senseur_id]
-            info_loc_temp_hum = "{location} {temperature:2.1f}C/{humidite:2.0f}%".format(**senseur)
+            senseur = self._documents[senseur_id].copy()
+            if len(senseur.get('location')) > taille_titre_tph:
+                senseur['location'] = senseur['location'][:taille_titre_tph]
+
+            info_loc_temp_hum = ligne_tph_format.format(**senseur)
             lignes.append(info_loc_temp_hum)
 
             if pression is None and senseur.get('pression') is not None:
-                pression = senseur.get('pression')
+                pression = senseur['pression']
+
+            if tendance is None and senseur.get('pression_tendance') is not None:
+                tendance = senseur['pression_tendance']
 
         if pression is not None:
-            lecture = {'pression': pression, 'tendance': '?'}
-            contenu = "Press: {pression:3.1f}kPa{tendance}".format(**lecture)
+            lecture = {'titre': 'Press.', 'pression': pression, 'tendance': tendance}
+            contenu = ligne_pression_format.format(**lecture)
             lignes.append(contenu)
 
         return lignes
