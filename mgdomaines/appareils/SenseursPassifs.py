@@ -339,10 +339,20 @@ class ProducteurDocumentSenseurPassif:
 
         # Noter l'utilisation de la timezone pour le regroupement. Important pour faire la separation des donnees
         # correctement.
+        # Noter l'absence de timezone - ce n'est pas important pour le regroupement par heure.
         regroupement_periode = {
-            'year': {'$year':  {'date': '$info-transaction.estampille', 'timezone': 'America/Montreal'}},
-            'month': {'$month':  {'date': '$info-transaction.estampille', 'timezone': 'America/Montreal'}},
-            'day': {'$dayOfMonth':  {'date': '$info-transaction.estampille', 'timezone': 'America/Montreal'}}
+            'year': {'$year': {
+                'date': {'$toDate': {'$multiply': ['$charge-utile.temps_lecture', 1000]}},
+                'timezone': 'America/Montreal'
+            }},
+            'month': {'$month': {
+                'date': {'$toDate': {'$multiply': ['$charge-utile.temps_lecture', 1000]}},
+                'timezone': 'America/Montreal'
+            }},
+            'day': {'$dayOfMonth': {
+                'date': {'$toDate': {'$multiply': ['$charge-utile.temps_lecture', 1000]}},
+                'timezone': 'America/Montreal'
+            }}
         }
 
         regroupement = {
