@@ -185,7 +185,7 @@ class ProducteurDocumentSenseurPassif:
         return document_senseur
 
     ''' 
-    Calcule les moyennes/min/max de la derniere journee pour un senseur avec donnees numeriques. 
+    Calcule les moyennes de la derniere journee pour un senseur avec donnees numeriques. 
     
     :param id_document_senseur: _id de base de donnees Mongo pour le senseur a mettre a jour.
     '''
@@ -215,6 +215,8 @@ class ProducteurDocumentSenseurPassif:
         time_range_to = int(time_range_to.timestamp())
         time_range_from = int(time_range_from.timestamp())
 
+        logging.debug("Requete time range %d a %d" % (time_range_from, time_range_to))
+
         selection = {
             'info-transaction.domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE,
             'charge-utile.temps_lecture': {'$gte': time_range_from, '$lt': time_range_to},
@@ -224,10 +226,10 @@ class ProducteurDocumentSenseurPassif:
 
         # Noter l'absence de timezone - ce n'est pas important pour le regroupement par heure.
         regroupement_periode = {
-            'year': {'$year': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
-            'month': {'$month': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
-            'day': {'$dayOfMonth': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
-            'hour': {'$hour': {'$arrayElemAt': ['$evenements.transaction_nouvelle', 0]}},
+            'year': {'$year': {'$toDate': {'$multiply': ['$charge-utile.temps_lecture', 1000]}}},
+            'month': {'$month': {'$toDate': {'$multiply': ['$charge-utile.temps_lecture', 1000]}}},
+            'day': {'$dayOfMonth': {'$toDate': {'$multiply': ['$charge-utile.temps_lecture', 1000]}}},
+            'hour': {'$hour': {'$toDate': {'$multiply': ['$charge-utile.temps_lecture', 1000]}}},
         }
 
         regroupement = {
@@ -257,15 +259,40 @@ class ProducteurDocumentSenseurPassif:
             res['periode'] = res['_id']['periode']
             del res['_id']
             resultat.append(res)
+            logging.debug("Resultat: %s" % str(res))
+
+        logging.debug("Document %s, Nombre resultats: %d" % (id_document_senseur, len(resultat)))
 
         # Trier les resultats en ordre decroissant de date
         resultat.sort(key=lambda res2: res2['periode'], reverse=True)
         for res in resultat:
-            logging.debug("Resultat: %s" % res)
+            logging.debug("Resultat trie: %s" % res)
+
+        operation_set = {'moyennes_dernier_jour': resultat}
+
+        # Si on a des lectures de pression atmospheriques, on peut calculer la tendance
+        if len(resultat) > 1:
+            heure_1 = resultat[0].get('pression-moyenne')
+            heure_2 = resultat[1].get('pression-moyenne')
+
+            if heure_1 is not None and heure_2 is not None:
+                # Note: il faudrait aussi verifier l'intervalle entre les lectures (aucunes lectures pendant des heures)
+                tendance = '='
+                if heure_1 > heure_2:
+                    tendance = '+'
+                elif heure_2 > heure_1:
+                    tendance = '-'
+                operation_set['pression_tendance'] = tendance
+                logging.debug("Tendance pour %s / %s: %s" % (heure_1, heure_2, tendance))
+            else:
+                logging.debug("Pas de pression atmospherique %s" % id_document_senseur)
+
+        else:
+            logging.debug("Pas assez de donnees pour tendance: %s" % id_document_senseur)
 
         # Sauvegarde de l'information dans le document du senseur
         operation_update = {
-            '$set': {'moyennes_dernier_jour': resultat},
+            '$set': operation_set,
             '$currentDate': {Constantes.DOCUMENT_INFODOC_DERNIERE_MODIFICATION: True}
         }
         collection_senseurs.update_one(filter=senseur_objectid_key, update=operation_update, upsert=False)
