@@ -35,6 +35,7 @@ class WebPageDownload:
     @staticmethod
     def telecharger(url):
         logger.debug("certifi: Certificats utilises pour telecharger: %s" % certifi.where())
+        logger.debug("Telechargement du URL: %s" % url)
         with urllib.request.urlopen(url, cafile=certifi.where()) as response:
             contenu = response.read()
         return contenu

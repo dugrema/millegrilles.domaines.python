@@ -17,10 +17,22 @@ class CLWebPoll(ModeleAvecMessageDAO):
     def configurer_parser(self):
         super().configurer_parser()
 
+        self.parser.add_argument(
+            'url', type=str, help="URL a telecharger"
+        )
+
+        self.parser.add_argument(
+            '--domaine',
+            type=str,
+            required=False,
+            default=WebPageDownload.TRANSACTION_VALEUR_DOMAINE,
+            help="Domaine de la transaction"
+        )
+
     def executer(self):
         downloader = WebPageDownload(self.configuration, self.message_dao)
-        url = "https://redmine.maple.mdugre.info/projects.atom?key=85de669522c8db79531ca3dcabcfa6d780e32d49"
-        domaine = downloader.TRANSACTION_VALEUR_DOMAINE
+        url = self.args.url
+        domaine = self.args.domaine
         downloader.produire_transaction(url, domaine)
 
 
