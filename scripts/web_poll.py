@@ -3,7 +3,7 @@
 import logging
 
 from millegrilles.util.UtilScriptLigneCommande import ModeleAvecMessageDAO
-from mgdomaines.web.WebPoll import WebPageDownload, RSSFeedDownload
+from mgdomaines.web.WebPoll import RSSFeedDownload
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class WebPageDownloadCommandLine(ModeleAvecMessageDAO):
             '--domaine',
             type=str,
             required=False,
-            default=WebPageDownload.TRANSACTION_VALEUR_DOMAINE,
+            default=RSSFeedDownload.TRANSACTION_VALEUR_DOMAINE,
             help="Domaine de la transaction"
         )
 
