@@ -3,7 +3,7 @@
 import logging
 
 from millegrilles.util.UtilScriptLigneCommande import ModeleAvecMessageDAO
-from mgdomaines.web.WebPoll import WebPageDownload
+from mgdomaines.web.WebPoll import WebPageDownload, RSSFeedDownload
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class WebPageDownloadCommandLine(ModeleAvecMessageDAO):
         )
 
     def executer(self):
-        downloader = WebPageDownload(self.configuration, self.message_dao)
+        downloader = RSSFeedDownload(self.configuration, self.message_dao)
         url = self.args.url
         domaine = self.args.domaine
         downloader.produire_transaction(url, domaine)

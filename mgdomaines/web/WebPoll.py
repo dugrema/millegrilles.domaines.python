@@ -3,6 +3,7 @@
 import urllib.request
 import certifi
 import logging
+import feedparser
 
 from millegrilles.transaction.GenerateurTransaction import GenerateurTransaction
 
@@ -45,4 +46,19 @@ class WebPageDownload:
             "url": self.url,
             "contenuPage": str(contenu)
         }
+        return contenu_dict
+
+
+class RSSFeedDownload(WebPageDownload):
+
+    def __init__(self, configuration, message_dao, limit_bytes=50*1024):
+        super().__init__(configuration, message_dao, limit_bytes)
+
+    def traiter_contenu(self, contenu):
+        contenu_dict = super().traiter_contenu(contenu)
+        # Parser le feed
+        feed_content = feedparser.parse(contenu)
+        contenu_dict['rss'] = feed_content
+        del contenu_dict['contenuPage']  # On enleve le contenu purement string
+
         return contenu_dict
