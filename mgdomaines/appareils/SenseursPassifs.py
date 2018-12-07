@@ -27,6 +27,7 @@ class SenseursPassifsConstantes:
     TRANSACTION_DATE_LECTURE = 'temps_lecture'
     TRANSACTION_LOCATION = 'location'
     TRANSACTION_VALEUR_DOMAINE = 'mgdomaines.appareils.SenseursPassifs.lecture'
+    SENSEUR_REGLES_NOTIFICATIONS = 'regles_notifications'
 
     EVENEMENT_MAJ_HORAIRE = 'miseajour.horaire'
     EVENEMENT_MAJ_QUOTIDIENNE = 'miseajour.quotidienne'
@@ -503,7 +504,7 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
 
             # Verifier s'il y a des regles de notifications pour ce senseur. Si oui, on va mettre un flag
             # pour les verifier plus tard.
-            if document_senseur.get('regles_notifications') is not None:
+            if document_senseur.get(SenseursPassifsConstantes.SENSEUR_REGLES_NOTIFICATIONS) is not None:
                 parametres['verifier_notifications'] = True  # Ajout un flag au processus pour envoyer notifications
 
             self.set_etape_suivante(ProcessusTransactionSenseursPassifsLecture.maj_noeud.__name__)
@@ -532,6 +533,12 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
 
     def notifications(self):
         # Identifier et transmettre les notifications
+        id_document_senseur = self._document_processus['parametres']['id_document_senseur']
+        collection = self._controleur.document_dao().get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
+        document_senseur = collection.find_one(id_document_senseur)
+        regles_notification = document_senseur[SenseursPassifsConstantes.SENSEUR_REGLES_NOTIFICATIONS]
+
+        logger.debug("Document senseur, regles de notification: %s" % regles_notification)
 
         # Continuer avec la mise a jour du noeud
         self.set_etape_suivante()
