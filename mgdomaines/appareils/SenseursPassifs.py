@@ -177,7 +177,7 @@ class ProducteurDocumentSenseurPassif:
                 # Executer la meme operation avec upsert=True pour inserer un nouveau document
                 resultat_update = collection.update_one(filter=selection, update=operation, upsert=True)
                 document_senseur = {'_id': resultat_update.upserted_id}
-                logger.debug("_id du nouveau document: %s" % str(resultat_update.upserted_id))
+                logger.info("_id du nouveau document: %s" % str(resultat_update.upserted_id))
             else:
                 logger.debug("Document existant non MAJ: %s" % str(document_senseur))
                 document_senseur = None
@@ -500,6 +500,12 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
         if document_senseur and document_senseur.get("_id") is not None:
             # Preparer la prochaine etape - mettre a jour le noeud
             parametres = {"id_document_senseur": document_senseur.get("_id")}
+
+            # Verifier s'il y a des regles de notifications pour ce senseur. Si oui, on va mettre un flag
+            # pour les verifier plus tard.
+            if document_senseur.get('regles_notifications') is not None:
+                parametres['verifier_notifications'] = True  # Ajout un flag au processus pour envoyer notifications
+
             self.set_etape_suivante(ProcessusTransactionSenseursPassifsLecture.maj_noeud.__name__)
         else:
             # Le document de senseur n'a pas ete modifie, probablement parce que les donnees n'etaient pas
@@ -517,6 +523,12 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
         producteur_document.maj_document_noeud_senseurpassif(id_document_senseur)
 
         self.set_etape_suivante()  # Etape finale
+
+    def notifications(self):
+        # Identifier et transmettre les notifications
+
+        # Continuer avec la mise a jour du noeud
+        self.set_etape_suivante(ProcessusTransactionSenseursPassifsLecture.maj_noeud.__name__)
 
 
 class ProcessusTransactionSenseursPassifsMAJHoraire(MGProcessus):
