@@ -522,13 +522,19 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
         producteur_document = ProducteurDocumentNoeud(self.message_dao(), self.document_dao())
         producteur_document.maj_document_noeud_senseurpassif(id_document_senseur)
 
-        self.set_etape_suivante()  # Etape finale
+        # Verifier si on doit executer les notifications
+        if self._document_processus['parametres'].get("verifier_notifications"):
+            # On a des regles de notifications, c'est la prochaine etape.
+            self.set_etape_suivante(ProcessusTransactionSenseursPassifsLecture.notifications.__name__)
+        else:
+            # Il ne reste rien a faire
+            self.set_etape_suivante()  # Etape finale
 
     def notifications(self):
         # Identifier et transmettre les notifications
 
         # Continuer avec la mise a jour du noeud
-        self.set_etape_suivante(ProcessusTransactionSenseursPassifsLecture.maj_noeud.__name__)
+        self.set_etape_suivante()
 
 
 class ProcessusTransactionSenseursPassifsMAJHoraire(MGProcessus):

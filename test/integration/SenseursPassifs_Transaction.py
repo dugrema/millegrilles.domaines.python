@@ -12,7 +12,7 @@ class TransactionSenseursPassifsTest:
         # temps_lecture_ajuste = temps_lecture + datetime.timedelta(hours=4)
 
         message_dict = dict()
-        message_dict['senseur'] = 1
+        message_dict['senseur'] = 2
         message_dict['temps_lecture'] = int(temps_lecture.timestamp())
         message_dict['temperature'] = 22.5
         message_dict['humidite'] = 67.2
