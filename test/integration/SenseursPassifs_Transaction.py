@@ -14,7 +14,7 @@ class TransactionSenseursPassifsTest:
         message_dict = dict()
         message_dict['senseur'] = 2
         message_dict['temps_lecture'] = int(temps_lecture.timestamp())
-        message_dict['temperature'] = 22.5
+        message_dict['temperature'] = 19.0
         message_dict['humidite'] = 67.2
         message_dict['pression'] = 103.3
         message_dict['hachi-parmentier'] = 'Nah nah nah, nah!'

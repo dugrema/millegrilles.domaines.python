@@ -482,6 +482,57 @@ class ProducteurDocumentNoeud:
         collection_senseurs.update_one(filter=filtre, update=update, upsert=True)
 
 
+class VerificateurNotificationsSenseursPassifs:
+
+    def __init__(self, message_dao, regles, doc_senseur):
+        self.message_dao = message_dao
+        self.regles = regles
+        self.doc_senseur = doc_senseur
+
+    ''' Traite les regles et envoit les notifications au besoin. '''
+    def traiter_regles(self):
+        logger.debug("Traiter regles: %s" % self.regles)
+
+        # Les regles sont dans une liste, elles doivent etre executees en ordre
+        for regle in self.regles:
+            logger.debug("Ligne regle: %s" % str(regle))
+            for nom_regle in regle:
+                parametres = regle[nom_regle]
+                logger.debug("Regle: %s, parametres: %s" % (nom_regle, str(parametres)))
+
+                try:
+                    # Le nom de la regle correspond a la methode de cette classe
+                    methode_regle = getattr(self, nom_regle)
+                    methode_regle(parametres)
+                except AttributeError as ae:
+                    logger.error("Erreur regle de notification inconnue: %s" % nom_regle)
+                except Exception as e:
+                    logger.exception("Erreur notification")
+
+    ''' Regle qui envoit une notification si la valeur du senseur sort de l'intervalle. '''
+    def avertissement_hors_intervalle(self, parametres):
+        nom_variable = parametres['variable']
+        valeur_min = parametres['min']
+        valeur_max = parametres['max']
+
+        valeur_courante = self.doc_senseur[nom_variable]
+        if not valeur_min <= valeur_courante <= valeur_max:
+            logger.debug(
+                "Valeur %s hors des limites (%f), on transmet une notification" % (nom_variable, valeur_courante)
+            )
+
+    ''' Regle qui envoit une notification si la valeur du senseur est dans l'intervalle. '''
+    def avertissement_dans_intervalle(self, parametres):
+        nom_variable = parametres['variable']
+        valeur_min = parametres['min']
+        valeur_max = parametres['max']
+
+        valeur_courante = self.doc_senseur[nom_variable]
+        if valeur_min <= valeur_courante <= valeur_max:
+            logger.debug(
+                "Valeur %s dans les limites (%f), on transmet une notification" % (nom_variable, valeur_courante)
+            )
+
 # Processus pour enregistrer une transaction d'un senseur passif
 class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
 
@@ -539,8 +590,14 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
         regles_notification = document_senseur[SenseursPassifsConstantes.SENSEUR_REGLES_NOTIFICATIONS]
 
         logger.debug("Document senseur, regles de notification: %s" % regles_notification)
+        verificateur = VerificateurNotificationsSenseursPassifs(
+            self._controleur.message_dao(),
+            regles_notification,
+            document_senseur
+        )
+        verificateur.traiter_regles()
 
-        # Continuer avec la mise a jour du noeud
+        # Terminer ce processus
         self.set_etape_suivante()
 
 
