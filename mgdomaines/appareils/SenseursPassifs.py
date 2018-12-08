@@ -509,29 +509,80 @@ class VerificateurNotificationsSenseursPassifs:
                 except Exception as e:
                     logger.exception("Erreur notification")
 
+    def transmettre_notification(self, nom_regle, message):
+        sub_routing_key = 'mgdomaines.appareils.SenseursPassifs.%s' % nom_regle
+
+        message_copy = message.copy()
+        message['_id'] = str(self.doc_senseur['_id'])
+        message_copy['date'] = int(datetime.datetime.utcnow().timestamp())
+        message['noeud'] = self.doc_senseur['noeud']
+        message['senseur'] = self.doc_senseur['senseur']
+        message['regle'] = nom_regle
+        message['domaine'] = sub_routing_key
+
+        self.message_dao.transmettre_notification(message, sub_routing_key)
+
     ''' Regle qui envoit une notification si la valeur du senseur sort de l'intervalle. '''
     def avertissement_hors_intervalle(self, parametres):
-        nom_variable = parametres['variable']
+        nom_element = parametres['element']
         valeur_min = parametres['min']
         valeur_max = parametres['max']
 
-        valeur_courante = self.doc_senseur[nom_variable]
+        valeur_courante = self.doc_senseur[nom_element]
         if not valeur_min <= valeur_courante <= valeur_max:
             logger.debug(
-                "Valeur %s hors des limites (%f), on transmet une notification" % (nom_variable, valeur_courante)
+                "Valeur %s hors des limites (%f), on transmet une notification" % (nom_element, valeur_courante)
             )
+            nom_regle = 'avertissement_hors_intervalle'
+            message = parametres.copy()
+            message['valeur'] = valeur_courante
+            self.transmettre_notification(nom_regle, message)
 
     ''' Regle qui envoit une notification si la valeur du senseur est dans l'intervalle. '''
     def avertissement_dans_intervalle(self, parametres):
-        nom_variable = parametres['variable']
+        nom_element = parametres['element']
         valeur_min = parametres['min']
         valeur_max = parametres['max']
 
-        valeur_courante = self.doc_senseur[nom_variable]
+        valeur_courante = self.doc_senseur[nom_element]
         if valeur_min <= valeur_courante <= valeur_max:
             logger.debug(
-                "Valeur %s dans les limites (%f), on transmet une notification" % (nom_variable, valeur_courante)
+                "Valeur %s dans les limites (%f), on transmet une notification" % (nom_element, valeur_courante)
             )
+            nom_regle = 'avertissement_dans_intervalle'
+            message = parametres.copy()
+            message['valeur'] = valeur_courante
+            self.transmettre_notification(nom_regle, message)
+
+    ''' Regle qui envoit une notification si la valeur du senseur est inferieure. '''
+    def avertissement_inferieur(self, parametres):
+        nom_element = parametres['element']
+        valeur_min = parametres['min']
+
+        valeur_courante = self.doc_senseur[nom_element]
+        if valeur_courante < valeur_min:
+            logger.debug(
+                "Valeur %s sous la limite (%f), on transmet une notification" % (nom_element, valeur_courante)
+            )
+            nom_regle = 'avertissement_inferieur'
+            message = parametres.copy()
+            message['valeur'] = valeur_courante
+            self.transmettre_notification(nom_regle, message)
+
+    ''' Regle qui envoit une notification si la valeur du senseur est inferieure. '''
+    def avertissement_superieur(self, parametres):
+        nom_element = parametres['element']
+        valeur_max = parametres['max']
+
+        valeur_courante = self.doc_senseur[nom_element]
+        if valeur_courante > valeur_max:
+            logger.debug(
+                "Valeur %s au-dessus de la limite (%f), on transmet une notification" % (nom_element, valeur_courante)
+            )
+            nom_regle = 'avertissement_superieur'
+            message = parametres.copy()
+            message['valeur'] = valeur_courante
+            self.transmettre_notification(nom_regle, message)
 
 # Processus pour enregistrer une transaction d'un senseur passif
 class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):

@@ -14,9 +14,10 @@ class TransactionSenseursPassifsTest:
         message_dict = dict()
         message_dict['senseur'] = 2
         message_dict['temps_lecture'] = int(temps_lecture.timestamp())
-        message_dict['temperature'] = 19.0
+        message_dict['temperature'] = 25.0
         message_dict['humidite'] = 67.2
         message_dict['pression'] = 103.3
+        message_dict['bat_mv'] = 3498
         message_dict['hachi-parmentier'] = 'Nah nah nah, nah!'
         uuid_transaction = self._producteur.transmettre_lecture_senseur(message_dict)
         print("Sent: UUID:%s = %s" % (uuid_transaction, message_dict))
