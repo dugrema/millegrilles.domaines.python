@@ -103,12 +103,12 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
             self._logger.exception("Erreur traitement cedule minute: %s" % str(e))
 
         # Verifier si les indicateurs sont pour notre timezone
-        if 'EST' in indicateurs or 'EDT' in indicateurs:
-            if 'heure' in indicateurs:
-                try:
-                    self.traiter_cedule_heure(evenement)
-                except Exception as he:
-                    self._logger.exception("Erreur traitement cedule horaire: %s" % str(he))
+        if 'heure' in indicateurs:
+            try:
+                self.traiter_cedule_heure(evenement)
+            except Exception as he:
+                self._logger.exception("Erreur traitement cedule horaire: %s" % str(he))
+            if 'EST' in indicateurs or 'EDT' in indicateurs:
                 if 'jour' in indicateurs:
                     try:
                         self.traiter_cedule_quotidienne(evenement)
