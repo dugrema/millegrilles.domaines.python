@@ -10,13 +10,12 @@ from millegrilles.dao.MessageDAO import BaseCallback
 from millegrilles.transaction.GenerateurTransaction import GenerateurTransaction
 from bson.objectid import ObjectId
 
-logger = logging.getLogger(__name__)
-
 
 # Constantes pour SenseursPassifs
 class SenseursPassifsConstantes:
 
     COLLECTION_NOM = 'mgdomaines_appareils_SenseursPassifs'
+    DOMAINE_NOM = 'mgdomaines.appareils.SenseursPassifs'
 
     LIBELLE_DOCUMENT_SENSEUR = 'senseur.individuel'
     LIBELLE_DOCUMENT_NOEUD = 'noeud.individuel'
@@ -26,7 +25,7 @@ class SenseursPassifsConstantes:
     TRANSACTION_ID_SENSEUR = 'senseur'
     TRANSACTION_DATE_LECTURE = 'temps_lecture'
     TRANSACTION_LOCATION = 'location'
-    TRANSACTION_VALEUR_DOMAINE = 'mgdomaines.appareils.SenseursPassifs.lecture'
+    TRANSACTION_VALEUR_DOMAINE = '%s.lecture' % DOMAINE_NOM
     SENSEUR_REGLES_NOTIFICATIONS = 'regles_notifications'
 
     EVENEMENT_MAJ_HORAIRE = 'miseajour.horaire'
@@ -41,6 +40,8 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
         self._traitement_lecture = None
         self.traiter_transaction = None   # Override de la methode super().traiter_transaction
         self._traitement_backlog_lectures = None
+
+        self._logger = logging.getLogger("%s.GestionnaireSenseursPassifs" % __name__)
 
     def configurer(self):
         super().configurer()
@@ -67,6 +68,12 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
             routing_key='%s.destinataire.domaine.mgdomaines.appareils.SenseursPassifs.#' % nom_millegrille
         )
 
+        self.message_dao.channel.queue_bind(
+            exchange=self.configuration.exchange_evenements,
+            queue=nom_queue_senseurspassifs,
+            routing_key='%s.ceduleur.#' % nom_millegrille
+        )
+
     def traiter_backlog(self):
         # Il faut trouver la transaction la plus recente pour chaque noeud/senseur et relancer une transaction
         # de persistance.
@@ -85,6 +92,61 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
         nom_millegrille = self.configuration.nom_millegrille
         nom_queue_senseurspassifs = 'mg.%s.mgdomaines.appareils.SenseursPassifs' % nom_millegrille
         return nom_queue_senseurspassifs
+
+    ''' Traite les evenements sur cedule. '''
+    def traiter_cedule(self, evenement):
+        indicateurs = evenement['indicateurs']
+
+        try:
+            self.traiter_cedule_minute(evenement)
+        except Exception as e:
+            self._logger.exception("Erreur traitement cedule minute: %s" % str(e))
+
+        # Verifier si les indicateurs sont pour notre timezone
+        if 'EST' in indicateurs or 'EDT' in indicateurs:
+            if 'heure' in indicateurs:
+                try:
+                    self.traiter_cedule_heure(evenement)
+                except Exception as he:
+                    self._logger.exception("Erreur traitement cedule horaire: %s" % str(he))
+                if 'jour' in indicateurs:
+                    try:
+                        self.traiter_cedule_quotidienne(evenement)
+                    except Exception as de:
+                        self._logger.exception("Erreur traitement cedule quotidienne: %s" % str(de))
+
+    def traiter_cedule_minute(self, evenement):
+        pass
+
+    def traiter_cedule_heure(self, evenement):
+
+        # Declencher l'aggregation horaire des lectures
+        domaine = '%s.MAJHoraire' % SenseursPassifsConstantes.DOMAINE_NOM
+        dict_message = {
+            'evenements': SenseursPassifsConstantes.EVENEMENT_MAJ_HORAIRE,
+            'timestamp': datetime.datetime.utcnow().isoformat()
+        }
+        self.transmettre_declencheur_domaine(domaine, dict_message)
+
+    def traiter_cedule_quotidienne(self, evenement):
+
+        # Declencher l'aggregation quotidienne des lectures
+        domaine = '%s.MAJQuotidienne' % SenseursPassifsConstantes.DOMAINE_NOM
+        dict_message = {
+            'evenements': SenseursPassifsConstantes.EVENEMENT_MAJ_QUOTIDIENNE,
+            'timestamp': datetime.datetime.utcnow().isoformat()
+        }
+        self.transmettre_declencheur_domaine(domaine, dict_message)
+
+    '''
+     Transmet un message via l'echange MilleGrilles pour un domaine specifique
+    
+     :param domaine: Domaine millegrilles    
+     '''
+    def transmettre_declencheur_domaine(self, domaine, dict_message):
+        nom_millegrille = self.configuration.nom_millegrille
+        routing_key = '%s.destinataire.domaine.%s' % (nom_millegrille, domaine)
+        self.message_dao.transmettre_message(dict_message, routing_key)
 
 
 class TraitementMessageLecture(BaseCallback):
@@ -106,6 +168,8 @@ class TraitementMessageLecture(BaseCallback):
         elif evenement == SenseursPassifsConstantes.EVENEMENT_MAJ_QUOTIDIENNE:
             processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsMAJQuotidienne"
             self._gestionnaire.demarrer_processus(processus, message_dict)
+        elif evenement == Constantes.EVENEMENT_CEDULEUR:
+            self._gestionnaire.traiter_cedule(message_dict)
         else:
             # Type d'evenement inconnu, on lance une exception
             raise ValueError("Type d'evenement inconnu: %s" % evenement)
@@ -117,6 +181,7 @@ class ProducteurDocumentSenseurPassif:
     def __init__(self, message_dao, document_dao):
         self._message_dao = message_dao
         self._document_dao = document_dao
+        self._logger = logging.getLogger("%s.ProducteurDocumentSenseurPassif" % __name__)
 
     ''' 
     Extrait l'information d'une lecture de senseur passif pour creer ou mettre a jour le document du senseur.
@@ -160,7 +225,7 @@ class ProducteurDocumentSenseurPassif:
         # Mettre a jour les informations du document en copiant ceux de la transaction
         operation['$set'] = contenu_transaction
 
-        logger.debug("Donnees senseur passif: selection=%s, operation=%s" % (str(selection), str(operation)))
+        self._logger.debug("Donnees senseur passif: selection=%s, operation=%s" % (str(selection), str(operation)))
 
         collection = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
         document_senseur = collection.find_one_and_update(
@@ -178,12 +243,12 @@ class ProducteurDocumentSenseurPassif:
                 # Executer la meme operation avec upsert=True pour inserer un nouveau document
                 resultat_update = collection.update_one(filter=selection, update=operation, upsert=True)
                 document_senseur = {'_id': resultat_update.upserted_id}
-                logger.info("_id du nouveau document: %s" % str(resultat_update.upserted_id))
+                self._logger.info("_id du nouveau document: %s" % str(resultat_update.upserted_id))
             else:
-                logger.debug("Document existant non MAJ: %s" % str(document_senseur))
+                self._logger.debug("Document existant non MAJ: %s" % str(document_senseur))
                 document_senseur = None
         else:
-            logger.debug("MAJ update: %s" % str(document_senseur))
+            self._logger.debug("MAJ update: %s" % str(document_senseur))
 
         return document_senseur
 
@@ -200,7 +265,7 @@ class ProducteurDocumentSenseurPassif:
         collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
         document_senseur = collection_senseurs.find_one(senseur_objectid_key)
 
-        logger.debug("Document charge: %s" % str(document_senseur))
+        self._logger.debug("Document charge: %s" % str(document_senseur))
 
         noeud = document_senseur[SenseursPassifsConstantes.TRANSACTION_NOEUD]
         no_senseur = document_senseur[SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR]
@@ -218,7 +283,7 @@ class ProducteurDocumentSenseurPassif:
         time_range_to = int(time_range_to.timestamp())
         time_range_from = int(time_range_from.timestamp())
 
-        logger.debug("Requete time range %d a %d" % (time_range_from, time_range_to))
+        self._logger.debug("Requete time range %d a %d" % (time_range_from, time_range_to))
 
         selection = {
             'info-transaction.domaine': SenseursPassifsConstantes.TRANSACTION_VALEUR_DOMAINE,
@@ -251,7 +316,7 @@ class ProducteurDocumentSenseurPassif:
             {'$group': regroupement},
         ]
 
-        logger.debug("Operation aggregation: %s" % str(operation))
+        self._logger.debug("Operation aggregation: %s" % str(operation))
 
         collection_transactions = self._document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
         resultat_curseur = collection_transactions.aggregate(operation)
@@ -262,14 +327,14 @@ class ProducteurDocumentSenseurPassif:
             res['periode'] = res['_id']['periode']
             del res['_id']
             resultat.append(res)
-            logger.debug("Resultat: %s" % str(res))
+            self._logger.debug("Resultat: %s" % str(res))
 
-        logger.debug("Document %s, Nombre resultats: %d" % (id_document_senseur, len(resultat)))
+            self._logger.debug("Document %s, Nombre resultats: %d" % (id_document_senseur, len(resultat)))
 
         # Trier les resultats en ordre decroissant de date
         resultat.sort(key=lambda res2: res2['periode'], reverse=True)
         for res in resultat:
-            logger.debug("Resultat trie: %s" % res)
+            self._logger.debug("Resultat trie: %s" % res)
 
         operation_set = {'moyennes_dernier_jour': resultat}
 
@@ -286,12 +351,12 @@ class ProducteurDocumentSenseurPassif:
                 elif heure_2 > heure_1:
                     tendance = '-'
                 operation_set['pression_tendance'] = tendance
-                logger.debug("Tendance pour %s / %s: %s" % (heure_1, heure_2, tendance))
+                self._logger.debug("Tendance pour %s / %s: %s" % (heure_1, heure_2, tendance))
             else:
-                logger.debug("Pas de pression atmospherique %s" % id_document_senseur)
+                self._logger.debug("Pas de pression atmospherique %s" % id_document_senseur)
 
         else:
-            logger.debug("Pas assez de donnees pour tendance: %s" % id_document_senseur)
+            self._logger.debug("Pas assez de donnees pour tendance: %s" % id_document_senseur)
 
         # Sauvegarde de l'information dans le document du senseur
         operation_update = {
@@ -312,7 +377,7 @@ class ProducteurDocumentSenseurPassif:
         collection_senseurs = self._document_dao.get_collection(SenseursPassifsConstantes.COLLECTION_NOM)
         document_senseur = collection_senseurs.find_one(senseur_objectid_key)
 
-        logger.debug("Document charge: %s" % str(document_senseur))
+        self._logger.debug("Document charge: %s" % str(document_senseur))
 
         noeud = document_senseur[SenseursPassifsConstantes.TRANSACTION_NOEUD]
         no_senseur = document_senseur[SenseursPassifsConstantes.TRANSACTION_ID_SENSEUR]
@@ -374,7 +439,7 @@ class ProducteurDocumentSenseurPassif:
             {'$group': regroupement},
         ]
 
-        logger.debug("Operation aggregation: %s" % str(operation))
+        self._logger.debug("Operation aggregation: %s" % str(operation))
 
         collection_transactions = self._document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
         resultat_curseur = collection_transactions.aggregate(operation)
@@ -389,7 +454,7 @@ class ProducteurDocumentSenseurPassif:
         # Trier les resultats en ordre decroissant de date
         resultat.sort(key=lambda res2: res2['periode'], reverse=True)
         for res in resultat:
-            logger.debug("Resultat: %s" % res)
+            self._logger.debug("Resultat: %s" % res)
 
         # Sauvegarde de l'information dans le document du senseur
         operation_update = {
@@ -488,26 +553,27 @@ class VerificateurNotificationsSenseursPassifs:
         self.message_dao = message_dao
         self.regles = regles
         self.doc_senseur = doc_senseur
+        self._logger = logging.getLogger('%s.VerificateurNotificationsSenseursPassifs' % __name__)
 
     ''' Traite les regles et envoit les notifications au besoin. '''
     def traiter_regles(self):
-        logger.debug("Traiter regles: %s" % self.regles)
+        self._logger.debug("Traiter regles: %s" % self.regles)
 
         # Les regles sont dans une liste, elles doivent etre executees en ordre
         for regle in self.regles:
-            logger.debug("Ligne regle: %s" % str(regle))
+            self._logger.debug("Ligne regle: %s" % str(regle))
             for nom_regle in regle:
                 parametres = regle[nom_regle]
-                logger.debug("Regle: %s, parametres: %s" % (nom_regle, str(parametres)))
+                self._logger.debug("Regle: %s, parametres: %s" % (nom_regle, str(parametres)))
 
                 try:
                     # Le nom de la regle correspond a la methode de cette classe
                     methode_regle = getattr(self, nom_regle)
                     methode_regle(parametres)
                 except AttributeError as ae:
-                    logger.error("Erreur regle de notification inconnue: %s" % nom_regle)
+                    self._logger.error("Erreur regle de notification inconnue: %s" % nom_regle)
                 except Exception as e:
-                    logger.exception("Erreur notification")
+                    self._logger.exception("Erreur notification")
 
     def transmettre_notification(self, nom_regle, message):
         sub_routing_key = 'mgdomaines.appareils.SenseursPassifs.%s' % nom_regle
@@ -530,7 +596,7 @@ class VerificateurNotificationsSenseursPassifs:
 
         valeur_courante = self.doc_senseur[nom_element]
         if not valeur_min <= valeur_courante <= valeur_max:
-            logger.debug(
+            self._logger.debug(
                 "Valeur %s hors des limites (%f), on transmet une notification" % (nom_element, valeur_courante)
             )
             nom_regle = 'avertissement_hors_intervalle'
@@ -546,7 +612,7 @@ class VerificateurNotificationsSenseursPassifs:
 
         valeur_courante = self.doc_senseur[nom_element]
         if valeur_min <= valeur_courante <= valeur_max:
-            logger.debug(
+            self._logger.debug(
                 "Valeur %s dans les limites (%f), on transmet une notification" % (nom_element, valeur_courante)
             )
             nom_regle = 'avertissement_dans_intervalle'
@@ -561,7 +627,7 @@ class VerificateurNotificationsSenseursPassifs:
 
         valeur_courante = self.doc_senseur[nom_element]
         if valeur_courante < valeur_min:
-            logger.debug(
+            self._logger.debug(
                 "Valeur %s sous la limite (%f), on transmet une notification" % (nom_element, valeur_courante)
             )
             nom_regle = 'avertissement_inferieur'
@@ -576,7 +642,7 @@ class VerificateurNotificationsSenseursPassifs:
 
         valeur_courante = self.doc_senseur[nom_element]
         if valeur_courante > valeur_max:
-            logger.debug(
+            self._logger.debug(
                 "Valeur %s au-dessus de la limite (%f), on transmet une notification" % (nom_element, valeur_courante)
             )
             nom_regle = 'avertissement_superieur'
@@ -584,17 +650,19 @@ class VerificateurNotificationsSenseursPassifs:
             message['valeur'] = valeur_courante
             self.transmettre_notification(nom_regle, message)
 
+
 # Processus pour enregistrer une transaction d'un senseur passif
 class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
 
     def __init__(self, controleur, evenement):
         super().__init__(controleur, evenement)
+        self._logger = logging.getLogger('%s.ProcessusTransactionSenseursPassifsLecture' % __name__)
 
     ''' Enregistrer l'information de la transaction dans le document du senseur '''
     def initiale(self):
         doc_transaction = self.charger_transaction()
-        logger.debug("Document processus: %s" % self._document_processus)
-        logger.debug("Document transaction: %s" % doc_transaction)
+        self._logger.debug("Document processus: %s" % self._document_processus)
+        self._logger.debug("Document transaction: %s" % doc_transaction)
 
         producteur_document = ProducteurDocumentSenseurPassif(self.message_dao(), self.document_dao())
         document_senseur = producteur_document.maj_document_senseur(doc_transaction)
@@ -640,7 +708,7 @@ class ProcessusTransactionSenseursPassifsLecture(MGProcessusTransaction):
         document_senseur = collection.find_one(id_document_senseur)
         regles_notification = document_senseur[SenseursPassifsConstantes.SENSEUR_REGLES_NOTIFICATIONS]
 
-        logger.debug("Document senseur, regles de notification: %s" % regles_notification)
+        self._logger.debug("Document senseur, regles de notification: %s" % regles_notification)
         verificateur = VerificateurNotificationsSenseursPassifs(
             self._controleur.message_dao(),
             regles_notification,
@@ -716,6 +784,7 @@ class TraitementBacklogLecturesSenseursPassifs:
     def __init__(self, message_dao, document_dao):
         self._message_dao = message_dao
         self._document_dao = document_dao
+        self._logger = logging.getLogger('%s.TraitementBacklogLecturesSenseursPassifs' % __name__)
 
         self.demarreur_processus = MGPProcessusDemarreur(self._message_dao, self._document_dao)
 
@@ -745,7 +814,7 @@ class TraitementBacklogLecturesSenseursPassifs:
             {'$group': regroupement}
         ]
 
-        logger.debug("Operation aggregation: %s" % str(operation))
+        self._logger.debug("Operation aggregation: %s" % str(operation))
 
         collection_transactions = self._document_dao.get_collection(Constantes.DOCUMENT_COLLECTION_TRANSACTIONS)
         resultat_curseur = collection_transactions.aggregate(operation)
@@ -758,7 +827,7 @@ class TraitementBacklogLecturesSenseursPassifs:
                 'temps_lecture': res['temps_lecture']
             }
             liste_transaction_senseurs.append(transaction)
-            logger.debug("Resultat: %s" % str(transaction))
+            self._logger.debug("Resultat: %s" % str(transaction))
 
         return liste_transaction_senseurs
 
@@ -787,7 +856,7 @@ class TraitementBacklogLecturesSenseursPassifs:
 
             for res in resultat_curseur:
                 # Preparer un message pour declencher la transaction
-                logger.debug("Transaction a declencher: _id = %s" % str(res['_id']))
+                self._logger.debug("Transaction a declencher: _id = %s" % str(res['_id']))
                 processus = "mgdomaines_appareils_SenseursPassifs:ProcessusTransactionSenseursPassifsLecture"
                 message_dict = {
                     Constantes.TRANSACTION_MESSAGE_LIBELLE_ID_MONGO: str(res['_id']),
