@@ -1,0 +1,8 @@
+{
+  "domaines": [
+    {
+      "module": "mgdomaines.appareils.SenseursPassifs",
+      "classe": "GestionnaireSenseursPassifs"
+    }
+  ]
+}
