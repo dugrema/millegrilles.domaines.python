@@ -35,8 +35,8 @@ class SenseursPassifsConstantes:
 # Gestionnaire pour le domaine mgdomaines.appareils.SenseursPassifs.
 class GestionnaireSenseursPassifs(GestionnaireDomaine):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, configuration, message_dao, document_dao):
+        super().__init__(configuration, message_dao, document_dao)
         self._traitement_lecture = None
         self.traiter_transaction = None   # Override de la methode super().traiter_transaction
         self._traitement_backlog_lectures = None
@@ -86,6 +86,7 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
         traitement_backlog_lectures.declencher_calculs()
 
     def traiter_transaction(self, ch, method, properties, body):
+        # Note: Cette methode est remplacee dans la configuration (self.traiter_transaction = self._traitement...)
         raise NotImplementedError("N'est pas implemente")
 
     def get_nom_queue(self):
