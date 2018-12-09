@@ -108,7 +108,9 @@ class GestionnaireSenseursPassifs(GestionnaireDomaine):
                 self.traiter_cedule_heure(evenement)
             except Exception as he:
                 self._logger.exception("Erreur traitement cedule horaire: %s" % str(he))
-            if 'EST' in indicateurs or 'EDT' in indicateurs:
+
+            # Verifier si on a l'indicateur jour pour notre TZ (pas interesse par minuit UTC)
+            if 'Canada/Eastern' in indicateurs:
                 if 'jour' in indicateurs:
                     try:
                         self.traiter_cedule_quotidienne(evenement)
