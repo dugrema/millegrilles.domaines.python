@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='MilleGrilles.domaines.python',
-    version='0.8.6',
+    version='0.8.7',
     packages=['mgdomaines',
               'mgdomaines.appareils',
               'mgdomaines.web',
