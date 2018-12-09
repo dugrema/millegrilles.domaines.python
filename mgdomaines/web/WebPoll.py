@@ -43,6 +43,11 @@ class WebPollConstantes:
         ],
         'minute': [],
         'heure': [],
+        'heure/2': [],
+        'heure/3': [],
+        'heure/4': [],
+        'heure/6': [],
+        'heure/12': [],
         'jour': [],
         'semaine': [],
         'mois': []
@@ -119,46 +124,65 @@ class GestionnaireWebPoll(GestionnaireDomaine):
     def traiter_cedule(self, evenement):
         indicateurs = evenement['indicateurs']
 
+        document_configuration = self.get_document_configuration()
+
         try:
-            self.traiter_cedule_minute(evenement)
+            self.traiter_taches_cedule(document_configuration['minute'])
         except Exception as e:
             self._logger.exception("Erreur traitement cedule minute: %s" % str(e))
 
         # Verifier si les indicateurs sont pour notre timezone
         if 'heure' in indicateurs:
             try:
-                self.traiter_cedule_heure(evenement)
+                self.traiter_taches_cedule(document_configuration['heure'])
             except Exception as he:
                 self._logger.exception("Erreur traitement cedule horaire: %s" % str(he))
+
+            # Verifier les fractions d'heures
+            heure_utc = evenement['timestamp'][3]
+            if heure_utc % 2 == 0:
+                self.traiter_taches_cedule(document_configuration['heure/2'])
+            if heure_utc % 3 == 0:
+                self.traiter_taches_cedule(document_configuration['heure/3'])
+            if heure_utc % 4 == 0:
+                self.traiter_taches_cedule(document_configuration['heure/4'])
+            if heure_utc % 6 == 0:
+                self.traiter_taches_cedule(document_configuration['heure/6'])
+            if heure_utc % 12 == 0:
+                self.traiter_taches_cedule(document_configuration['heure/12'])
 
             # Verifier si on a l'indicateur jour pour notre TZ (pas interesse par minuit UTC)
             if 'Canada/Eastern' in indicateurs:
                 if 'jour' in indicateurs:
                     try:
-                        self.traiter_cedule_quotidienne(evenement)
+                        self.traiter_taches_cedule(document_configuration['jour'])
                     except Exception as de:
                         self._logger.exception("Erreur traitement cedule quotidienne: %s" % str(de))
 
-    def traiter_cedule_minute(self, evenement):
-        document_configuration = self.get_document_configuration()
-        taches_minutes = document_configuration['minute']
-
-        for tache in taches_minutes:
+    def traiter_taches_cedule(self, taches):
+        for tache in taches:
             self.telecharger(tache)
 
-    def traiter_cedule_heure(self, evenement):
-        document_configuration = self.get_document_configuration()
-        taches_minutes = document_configuration['heure']
-
-        for tache in taches_minutes:
-            self.telecharger(tache)
-
-    def traiter_cedule_quotidienne(self, evenement):
-        document_configuration = self.get_document_configuration()
-        taches_minutes = document_configuration['jour']
-
-        for tache in taches_minutes:
-            self.telecharger(tache)
+    # def traiter_cedule_minute(self, evenement):
+    #     document_configuration = self.get_document_configuration()
+    #     taches_minutes = document_configuration['minute']
+    #
+    #     for tache in taches_minutes:
+    #         self.telecharger(tache)
+    #
+    # def traiter_cedule_heure(self, evenement):
+    #     document_configuration = self.get_document_configuration()
+    #     taches_minutes = document_configuration['heure']
+    #
+    #     for tache in taches_minutes:
+    #         self.telecharger(tache)
+    #
+    # def traiter_cedule_quotidienne(self, evenement):
+    #     document_configuration = self.get_document_configuration()
+    #     taches_minutes = document_configuration['jour']
+    #
+    #     for tache in taches_minutes:
+    #         self.telecharger(tache)
 
     def telecharger(self, parametres):
         type_transaction = parametres.get('type')
