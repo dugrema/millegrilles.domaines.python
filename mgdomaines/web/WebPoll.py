@@ -123,6 +123,7 @@ class GestionnaireWebPoll(GestionnaireDomaine):
     ''' Traite les evenements sur cedule. '''
     def traiter_cedule(self, evenement):
         indicateurs = evenement['indicateurs']
+        self._logger.debug("Cedule webPoll: %s" % str(indicateurs))
 
         document_configuration = self.get_document_configuration()
 
@@ -139,17 +140,18 @@ class GestionnaireWebPoll(GestionnaireDomaine):
                 self._logger.exception("Erreur traitement cedule horaire: %s" % str(he))
 
             # Verifier les fractions d'heures
-            heure_utc = evenement['timestamp'][3]
-            if heure_utc % 2 == 0:
-                self.traiter_taches_cedule(document_configuration['heure/2'])
-            if heure_utc % 3 == 0:
-                self.traiter_taches_cedule(document_configuration['heure/3'])
-            if heure_utc % 4 == 0:
-                self.traiter_taches_cedule(document_configuration['heure/4'])
-            if heure_utc % 6 == 0:
-                self.traiter_taches_cedule(document_configuration['heure/6'])
-            if heure_utc % 12 == 0:
-                self.traiter_taches_cedule(document_configuration['heure/12'])
+            timestamp = evenement['timestamp']['UTC']
+            heure_utc = timestamp[3]
+            self._logger.debug("Heure UTC: %d" % heure_utc)
+
+            liste_heures = [2, 3, 4, 6, 12]
+            for step_heure in liste_heures:
+                cle_taches = 'heure%%%d' % step_heure
+                if heure_utc % step_heure == 0:
+                    taches = document_configuration.get(cle_taches)
+                    if taches is not None:
+                        self._logger.debug("WebPoll: %s" % cle_taches)
+                        self.traiter_taches_cedule(taches)
 
             # Verifier si on a l'indicateur jour pour notre TZ (pas interesse par minuit UTC)
             if 'Canada/Eastern' in indicateurs:
