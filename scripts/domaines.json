@@ -3,6 +3,10 @@
     {
       "module": "mgdomaines.appareils.SenseursPassifs",
       "classe": "GestionnaireSenseursPassifs"
+    },
+    {
+      "module": "mgdomaines.web.WebPoll",
+      "classe": "GestionnaireWebPoll"
     }
   ]
 }
