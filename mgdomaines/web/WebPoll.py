@@ -86,7 +86,7 @@ class GestionnaireWebPoll(GestionnaireDomaine):
         self.message_dao.channel.queue_bind(
             exchange=self.configuration.exchange_evenements,
             queue=nom_queue_webpoll,
-            routing_key='%s.destinataire.domaine.mgdomaines_web_WebPoll.#' % nom_millegrille
+            routing_key='%s.destinataire.domaine.mgdomaines.web.WebPoll.#' % nom_millegrille
         )
 
         self.message_dao.channel.queue_bind(
