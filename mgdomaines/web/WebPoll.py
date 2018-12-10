@@ -5,15 +5,11 @@ import certifi
 import logging
 import feedparser
 
-from bson import ObjectId
-
 from millegrilles.transaction.GenerateurTransaction import GenerateurTransaction
 from millegrilles.Domaines import GestionnaireDomaine
 from millegrilles.dao.MessageDAO import BaseCallback
 from millegrilles import Constantes
 from millegrilles.processus.MGProcessus import MGProcessusTransaction
-
-# logger = logging.getLogger(__name__)
 
 
 class WebPollConstantes:
@@ -24,30 +20,41 @@ class WebPollConstantes:
     # Se document se trouve dans la collection mgdomaines_web_WebPoll, _mg-libelle: configuration.
     document_configuration_reference = {
         Constantes.DOCUMENT_INFODOC_LIBELLE: 'configuration',
-        'exemple': [
-            {
+        'taches': {
+            'exemple1': {
                 'commentaire': 'Ceci est une tache de telechargement exemple. Voir parametres de ce dictionnaire',
                 'url': 'https://redmine.maple.mdugre.info/projects.atom?key=85de669522c8...',
                 'type': 'rss',
-                'domaine': 'mgdomaines_web_WebPoll.RSS'
+                'domaine': 'mgdomaines.web.WebPoll.RSS'
             },
-            {
+            'exemple2': {
                 'commentaire': 'Ceci est une tache de telechargement de page',
                 'url': 'https://www.maple.mdugre.info/',
                 'type': 'page',
-                'domaine': 'mgdomaines_web_WebPoll.WebPageDownload.informationspeciale.mathieu'
+                'domaine': 'mgdomaines.web.WebPoll.WebPageDownload.informationspeciale.mathieu'
             },
-            {
+            'minimal': {
                 'url': 'http://exemple.minimal'
+            },
+            'meteo_russell': {
+                "commentaire": "Telechargement previsions meteo Environnement Canada pour Ottawa-Metcalfe",
+                "url": "https://weather.gc.ca/rss/city/on-52_e.xml",
+                "type": "rss",
+                "domaine": "mgdomaines.web.WebPoll.RSS.weather_gc_ca.russell"
             }
-        ],
-        'minute': [],
-        'heure': [],
-        'heure/2': [],
-        'heure/3': [],
-        'heure/4': [],
-        'heure/6': [],
-        'heure/12': [],
+        },
+        'minute': ['exemple1'],
+        'minute%2': [],
+        'minute%3': [],
+        'minute%4': [],
+        'minute%6': [],
+        'minute%12': [],
+        'heure': ['exemple2', 'minimal'],
+        'heure%2': [],
+        'heure%3': [],
+        'heure%4': [],
+        'heure%6': [],
+        'heure%12': [],
         'jour': [],
         'semaine': [],
         'mois': []
@@ -127,64 +134,46 @@ class GestionnaireWebPoll(GestionnaireDomaine):
 
         document_configuration = self.get_document_configuration()
 
-        try:
-            self.traiter_taches_cedule(document_configuration['minute'])
-        except Exception as e:
-            self._logger.exception("Erreur traitement cedule minute: %s" % str(e))
+        # Faire la liste des cedules a declencher
+        timestamp = evenement['timestamp']['UTC']
+        heure_utc = timestamp[3]
+        minute_utc = timestamp[4]
+        cedules = ['minute']  # Le ceduleur est declenche a toutes les minutes, c'est implicite
 
-        # Verifier si les indicateurs sont pour notre timezone
-        if 'heure' in indicateurs:
+        if 'heure' in indicateurs:  # Cas special, on n'a pas l'indicateur de timezone pour l'heure
+            cedules.append('heure')
+
+        # Ajouter les indicateurs speciaux
+        if 'Canada/Eastern' in indicateurs:
+            indicateurs_speciaux = ['heure', 'jour', 'mois', 'annee']
+            for indicateur in indicateurs_speciaux:
+                if indicateur not in cedules and indicateur in indicateurs:
+                    cedules.append(indicateur)
+
+        # Cedules minute%2, minute%3, etc.
+        liste_steps = [2, 3, 4, 5, 6, 10, 12, 15, 20, 30]
+        for step in liste_steps:
+            if minute_utc % step == 0:
+                cedules.append('minute%%%d' % step)
+            if 'heure' in cedules and heure_utc % step == 0:
+                cedules.append('heure%%%d' % step)
+
+        for cedule in cedules:
             try:
-                self.traiter_taches_cedule(document_configuration['heure'])
-            except Exception as he:
-                self._logger.exception("Erreur traitement cedule horaire: %s" % str(he))
+                self._logger.debug("Voir si on a des taches pour cedule: %s" % cedule)
+                taches_cedule = document_configuration.get(cedule)
+                if taches_cedule is not None:
+                    self.traiter_taches_cedule(document_configuration, taches_cedule)
+            except Exception as e:
+                self._logger.exception("Erreur traitement taches cedule %s: %s" % (cedule, str(e)))
 
-            # Verifier les fractions d'heures
-            timestamp = evenement['timestamp']['UTC']
-            heure_utc = timestamp[3]
-            self._logger.debug("Heure UTC: %d" % heure_utc)
-
-            liste_heures = [2, 3, 4, 6, 12]
-            for step_heure in liste_heures:
-                cle_taches = 'heure%%%d' % step_heure
-                if heure_utc % step_heure == 0:
-                    taches = document_configuration.get(cle_taches)
-                    if taches is not None:
-                        self._logger.debug("WebPoll: %s" % cle_taches)
-                        self.traiter_taches_cedule(taches)
-
-            # Verifier si on a l'indicateur jour pour notre TZ (pas interesse par minuit UTC)
-            if 'Canada/Eastern' in indicateurs:
-                if 'jour' in indicateurs:
-                    try:
-                        self.traiter_taches_cedule(document_configuration['jour'])
-                    except Exception as de:
-                        self._logger.exception("Erreur traitement cedule quotidienne: %s" % str(de))
-
-    def traiter_taches_cedule(self, taches):
+    def traiter_taches_cedule(self, document_configuration, taches):
         for tache in taches:
-            self.telecharger(tache)
-
-    # def traiter_cedule_minute(self, evenement):
-    #     document_configuration = self.get_document_configuration()
-    #     taches_minutes = document_configuration['minute']
-    #
-    #     for tache in taches_minutes:
-    #         self.telecharger(tache)
-    #
-    # def traiter_cedule_heure(self, evenement):
-    #     document_configuration = self.get_document_configuration()
-    #     taches_minutes = document_configuration['heure']
-    #
-    #     for tache in taches_minutes:
-    #         self.telecharger(tache)
-    #
-    # def traiter_cedule_quotidienne(self, evenement):
-    #     document_configuration = self.get_document_configuration()
-    #     taches_minutes = document_configuration['jour']
-    #
-    #     for tache in taches_minutes:
-    #         self.telecharger(tache)
+            try:
+                description_tache = document_configuration['taches'][tache]
+                self.telecharger(description_tache)
+            except Exception as e:
+                self._logger.exception('Erreur traitement tache "%s" dans cedule: %s' % (tache, str(e)))
 
     def telecharger(self, parametres):
         type_transaction = parametres.get('type')
