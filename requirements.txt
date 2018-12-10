@@ -1,6 +1,0 @@
-pika==0.12
-pymongo
-bson
-certifi
-feedparser
-pytz
